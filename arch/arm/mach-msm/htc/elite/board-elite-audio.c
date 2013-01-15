@@ -1748,7 +1748,7 @@ static int __init elite_audio_init(void)
 		return -ENODEV;
 	}
 	pr_debug("%s", __func__);
-
+	mutex_init(&cdc_mclk_mutex);
 	msm_snd_device = platform_device_alloc("soc-audio", 0);
 	if (!msm_snd_device) {
 		pr_err("Platform device allocation failed\n");
@@ -1789,7 +1789,6 @@ static int __init elite_audio_init(void)
 	pr_debug("%s: register cable detect func for dock", __func__);
 	ret = cable_detect_register_notifier(&audio_dock_notifier);
 
-	mutex_init(&cdc_mclk_mutex);
 	atomic_set(&auxpcm_rsc_ref, 0);
 	return ret;
 
