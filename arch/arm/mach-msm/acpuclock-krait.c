@@ -927,8 +927,9 @@ static void __init bus_init(const struct l2_level *l2_level)
 
 #ifdef CONFIG_USERSPACE_VOLTAGE_CONTROL
 
-#define MAX_VDD 1300
-#define MIN_VDD 700
+#define MAX_VDD 1350
+#define MIN_VDD 600
+#define MIN_VDD_SC     600000 /* uV */
 
 int get_num_freqs(void)
 {
@@ -1094,8 +1095,8 @@ static const int krait_needs_vmin(void)
 static void krait_apply_vmin(struct acpu_level *tbl)
 {
 	for (; tbl->speed.khz != 0; tbl++) {
-		if (tbl->vdd_core < 1150000)
-			tbl->vdd_core = 1150000;
+		if (tbl->vdd_core < MIN_VDD_SC)
+			tbl->vdd_core = MIN_VDD_SC;
 		tbl->avsdscr_setting = 0;
 	}
 }
