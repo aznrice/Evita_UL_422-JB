@@ -375,7 +375,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -mtune=cortex-a9 \
 		   -fno-delete-null-pointer-checks \
 		   -fmodulo-sched -fmodulo-sched-allow-regmoves \
-		   -pipe
+		   -pipe -floop-interchange -ftree-loop-distribution -floop-strip-mine -floop-block
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
@@ -568,7 +568,7 @@ all: vmlinux
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os
 else ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
-KBUILD_CFLAGS   += -O3 -fmodulo-sched -fmodulo-sched-allow-regmoves
+KBUILD_CFLAGS   += -O3 -fmodulo-sched -fmodulo-sched-allow-regmoves -floop-interchange -ftree-loop-distribution -floop-strip-mine -floop-block
 else ifdef CONFIG_CC_OPTIMIZE_FOR_SPEED
 KBUILD_CFLAGS   += -Ofast
 else
