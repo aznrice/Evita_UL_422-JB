@@ -116,6 +116,12 @@ config CPU_FREQ_DEFAULT_GOV_BADASS
 	  'badass' - This driver adds a dynamic cpufreq policy governor.
 	  The governor does a periodic polling and
 
+config CPU_FREQ_DEFAULT_GOV_LIONHEART
+	bool "lionheart"
+	select CPU_FREQ_GOV_LIONHEART
+	help
+	 Use the CPUFreq governor 'lionheart' as default
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -210,6 +216,14 @@ config CPU_FREQ_GOV_CONSERVATIVE
 	  module will be called cpufreq_conservative.
 
 	  For details, take a look at linux/Documentation/cpu-freq.
+
+	  If in doubt, say N.
+
+config CPU_FREQ_GOV_LIONHEART
+	tristate "lionheart"
+	depends on CPU_FREQ
+	help
+	 Use the CPUFreq governor 'lionheart' as default.
 
 	  If in doubt, say N.
 
