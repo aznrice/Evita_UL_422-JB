@@ -34,18 +34,20 @@ initrd_phys-$(CONFIG_ARCH_QSD8X50)	:= 0x24000000
 endif
 
 # MSM8x60
-   zreladdr-$(CONFIG_ARCH_MSM8X60)	:= 0x48008000
-   params_phys-$(CONFIG_ARCH_MSM8X60)	:= 0x48000100
-   initrd_phys-$(CONFIG_ARCH_MSM8X60)	:= 0x49000000
+   zreladdr-$(CONFIG_ARCH_MSM8X60)	:= 0x40208000
 
 # MSM8960
+ifeq ($(CONFIG_MACH_HTC),y)
    zreladdr-$(CONFIG_ARCH_MSM8960)	:= 0x80408000
+else
+   zreladdr-$(CONFIG_ARCH_MSM8960)	:= 0x80208000
+endif
 
 # MSM8930
-   zreladdr-$(CONFIG_ARCH_MSM8930)	:= 0x80608000
+   zreladdr-$(CONFIG_ARCH_MSM8930)	:= 0x80208000
 
 # APQ8064
-   zreladdr-$(CONFIG_ARCH_APQ8064)	:= 0x80608000
+   zreladdr-$(CONFIG_ARCH_APQ8064)	:= 0x80208000
 
 # MSM8974
    zreladdr-$(CONFIG_ARCH_MSM8974)	:= 0x00008000

@@ -40,6 +40,7 @@ struct mmc_queue_req {
 	u32			packed_cmd_hdr[128];
 	unsigned int		packed_blocks;
 	enum mmc_packed_cmd	packed_cmd;
+	int		packed_retries;
 	int		packed_fail_idx;
 	u8		packed_num;
 };
@@ -65,7 +66,7 @@ struct mmc_queue {
 extern int mmc_init_queue(struct mmc_queue *, struct mmc_card *, spinlock_t *,
 			  const char *);
 extern void mmc_cleanup_queue(struct mmc_queue *);
-extern void mmc_queue_suspend(struct mmc_queue *);
+extern int mmc_queue_suspend(struct mmc_queue *);
 extern void mmc_queue_resume(struct mmc_queue *);
 
 extern unsigned int mmc_queue_map_sg(struct mmc_queue *,
@@ -74,7 +75,5 @@ extern void mmc_queue_bounce_pre(struct mmc_queue_req *);
 extern void mmc_queue_bounce_post(struct mmc_queue_req *);
 
 extern void print_mmc_packing_stats(struct mmc_card *card);
-extern int mmc_schedule_card_removal_work(struct delayed_work *work,
-                                    unsigned long delay);
-extern int mmc_reinit_card(struct mmc_host *host);
+
 #endif

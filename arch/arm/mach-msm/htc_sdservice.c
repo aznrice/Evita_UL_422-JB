@@ -25,7 +25,7 @@
 
 #ifndef CONFIG_ARCH_MSM7X30
 #include <mach/scm.h>
-#else	
+#else	/* CONFIG_ARCH_MSM7X30 */
 #include <linux/types.h>
 #include <linux/errno.h>
 #include <linux/mm.h>
@@ -45,32 +45,31 @@
 #define OEM_RAPI_STREAMING_FUNCTION_PROC          2
 
 #define OEM_RAPI_CLIENT_MAX_OUT_BUFF_SIZE 32
-#endif	
+#endif	/* CONFIG_ARCH_MSM7X30 */
 
 #define DEVICE_NAME "htc_sdservice"
 
 #define HTC_SDKEY_LEN 32
 #define HTC_IOCTL_SDSERVICE 0x9527
-#define HTC_IOCTL_SEC_ATS_GET	0x9528
-#define HTC_IOCTL_SEC_ATS_SET	0x9529
 
-#define TAG "[SEC] "
 #define HTC_SDSERVICE_DEBUG	0
 #undef PDEBUG
 #if HTC_SDSERVICE_DEBUG
-#define PDEBUG(fmt, args...) printk(KERN_INFO TAG "[K] %s(%i, %s): " fmt "\n", \
+#define PDEBUG(fmt, args...) printk(KERN_INFO "%s(%i, %s): " fmt "\n", \
 		__func__, current->pid, current->comm, ## args)
 #else
 #define PDEBUG(fmt, args...) do {} while (0)
-#endif 
+#endif /* HTC_SDSERVICE_DEBUG */
 
 #undef PERR
-#define PERR(fmt, args...) printk(KERN_ERR TAG "[E] %s(%i, %s): " fmt "\n", \
+#define PERR(fmt, args...) printk(KERN_ERR "%s(%i, %s): " fmt "\n", \
 		__func__, current->pid, current->comm, ## args)
 
-#undef PINFO
-#define PINFO(fmt, args...) printk(KERN_INFO TAG "[I] %s(%i, %s): " fmt "\n", \
-		__func__, current->pid, current->comm, ## args)
+#ifndef CONFIG_ARCH_MSM7X30
+#define UP(S)
+#else
+#define UP(S) up(S)
+#endif
 
 static int htc_sdservice_major;
 static struct class *htc_sdservice_class;
@@ -87,23 +86,15 @@ typedef struct _htc_sdservice_msg_s{
 	int resp_len;
 } htc_sdservice_msg_s;
 
-typedef struct {
-	struct {
-		uint8_t func_id;
-		uint8_t func_cur_state;
-		int8_t  func_return;
-		uint8_t func_exec;
-	} func_info;
-	uint32_t    input[2];
-	uint32_t    output[2];
-	uint8_t reserve[4];
-} htc_sec_ats_t;
-
-void scm_inv_range(unsigned long start, unsigned long end);
+enum {
+		HTC_SD_KEY_ENCRYPT = 0x33,
+		HTC_SD_KEY_DECRYPT,
+};
 
 #ifdef CONFIG_ARCH_MSM7X30
 static struct msm_rpc_client *rpc_client;
 static DEFINE_MUTEX(oem_rapi_client_lock);
+/* TODO: check where to allocate memory for return */
 int oem_rapi_client_cb(struct msm_rpc_client *client,
 			      struct rpc_request_hdr *req,
 			      struct msm_rpc_xdr *xdr)
@@ -120,12 +111,12 @@ int oem_rapi_client_cb(struct msm_rpc_client *client,
 	ret.out_len = NULL;
 	ret.output = NULL;
 
-	xdr_recv_uint32(xdr, &cb_id);                    
-	xdr_recv_uint32(xdr, &arg.event);                
-	xdr_recv_uint32(xdr, (uint32_t *)(&arg.handle)); 
-	xdr_recv_uint32(xdr, &arg.in_len);               
-	xdr_recv_bytes(xdr, (void **)&arg.input, &temp); 
-	xdr_recv_uint32(xdr, &arg.out_len_valid);        
+	xdr_recv_uint32(xdr, &cb_id);                    /* cb_id */
+	xdr_recv_uint32(xdr, &arg.event);                /* enum */
+	xdr_recv_uint32(xdr, (uint32_t *)(&arg.handle)); /* handle */
+	xdr_recv_uint32(xdr, &arg.in_len);               /* in_len */
+	xdr_recv_bytes(xdr, (void **)&arg.input, &temp); /* input */
+	xdr_recv_uint32(xdr, &arg.out_len_valid);        /* out_len */
 	if (arg.out_len_valid) {
 		ret.out_len = kmalloc(sizeof(*ret.out_len), GFP_KERNEL);
 		if (!ret.out_len) {
@@ -134,9 +125,9 @@ int oem_rapi_client_cb(struct msm_rpc_client *client,
 		}
 	}
 
-	xdr_recv_uint32(xdr, &arg.output_valid);         
+	xdr_recv_uint32(xdr, &arg.output_valid);         /* out */
 	if (arg.output_valid) {
-		xdr_recv_uint32(xdr, &arg.output_size);  
+		xdr_recv_uint32(xdr, &arg.output_size);  /* ouput_size */
 
 		ret.output = kmalloc(arg.output_size, GFP_KERNEL);
 		if (!ret.output) {
@@ -165,7 +156,7 @@ int oem_rapi_client_cb(struct msm_rpc_client *client,
 		xdr_send_pointer(xdr, (void **)&(ret.out_len), temp,
 				 xdr_send_uint32);
 
-		
+		/* output */
 		if (ret.output && ret.out_len)
 			xdr_send_bytes(xdr, (const void **)&ret.output,
 					     ret.out_len);
@@ -176,7 +167,7 @@ int oem_rapi_client_cb(struct msm_rpc_client *client,
 	}
 	rc = xdr_send_msg(xdr);
 	if (rc)
-		PERR("sending reply failed: %d", rc);
+		pr_err("%s: sending reply failed: %d\n", __func__, rc);
 
 	kfree(arg.input);
 	kfree(ret.out_len);
@@ -196,16 +187,16 @@ int oem_rapi_client_streaming_function_arg(struct msm_rpc_client *client,
 	if ((cb_id < 0) && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
 		return cb_id;
 
-	xdr_send_uint32(xdr, &arg->event);                
-	xdr_send_uint32(xdr, &cb_id);                     
-	xdr_send_uint32(xdr, (uint32_t *)(&arg->handle)); 
-	xdr_send_uint32(xdr, &arg->in_len);               
+	xdr_send_uint32(xdr, &arg->event);                /* enum */
+	xdr_send_uint32(xdr, &cb_id);                     /* cb_id */
+	xdr_send_uint32(xdr, (uint32_t *)(&arg->handle)); /* handle */
+	xdr_send_uint32(xdr, &arg->in_len);               /* in_len */
 	xdr_send_bytes(xdr, (const void **)&arg->input,
-			     &arg->in_len);                     
-	xdr_send_uint32(xdr, &arg->out_len_valid);        
-	xdr_send_uint32(xdr, &arg->output_valid);         
+			     &arg->in_len);                     /* input */
+	xdr_send_uint32(xdr, &arg->out_len_valid);        /* out_len */
+	xdr_send_uint32(xdr, &arg->output_valid);         /* output */
 
-	
+	/* output_size */
 	if (arg->output_valid)
 		xdr_send_uint32(xdr, &arg->output_size);
 
@@ -219,11 +210,11 @@ int oem_rapi_client_streaming_function_ret(struct msm_rpc_client *client,
 	struct oem_rapi_client_streaming_func_ret *ret = data;
 	uint32_t temp;
 
-	
+	/* out_len */
 	xdr_recv_pointer(xdr, (void **)&(ret->out_len), sizeof(uint32_t),
 			 xdr_recv_uint32);
 
-	
+	/* output */
 	if (ret->out_len && *ret->out_len)
 		xdr_recv_bytes(xdr, (void **)&ret->output, &temp);
 
@@ -250,7 +241,8 @@ int oem_rapi_client_close2(void)
 	if (open_count > 0) {
 		if (--open_count == 0) {
 			msm_rpc_unregister_client(rpc_client);
-			PDEBUG("Disconnected from remote oem rapi server");
+			pr_info("%s: disconnected from remote oem rapi server\n",
+				__func__);
 		}
 	}
 	mutex_unlock(&oem_rapi_client_lock);
@@ -269,7 +261,7 @@ struct msm_rpc_client *oem_rapi_client_init2(void)
 		if (!IS_ERR(rpc_client))
 			open_count++;
 	} else {
-		
+		/* increase the counter */
 		open_count++;
 	}
 	mutex_unlock(&oem_rapi_client_lock);
@@ -283,7 +275,7 @@ ssize_t oem_rapi_pack_send(unsigned int operation, char *buf, size_t size)
 	struct oem_rapi_client_streaming_func_arg arg;
 	struct oem_rapi_client_streaming_func_ret ret;
 
-	PINFO("oem_rapi_pack start:");
+	printk(KERN_INFO "oem_rapi_pack start:\n");
 	arg.event = operation;
 	arg.cb_func = NULL;
 	arg.handle = (void *)0;
@@ -297,28 +289,27 @@ ssize_t oem_rapi_pack_send(unsigned int operation, char *buf, size_t size)
 
 	ret_rpc = oem_rapi_client_streaming_function2(rpc_client, &arg, &ret);
 	if (ret_rpc) {
-		PERR("Send data from modem failed: %d", ret_rpc);
+		printk(KERN_INFO "%s: Send data from modem failed: %d\n", __func__, ret_rpc);
 		return -EFAULT;
 	}
-	PINFO("Data sent to modem %s", buf);
+	printk(KERN_ERR "%s: Data sent to modem %s\n", __func__, buf);
 	if(ret.output)
 		memcpy(buf, ret.output, OEM_RAPI_CLIENT_MAX_OUT_BUFF_SIZE);
 	else{
-		PERR("Receive data from modem failed");
+		printk(KERN_ERR "%s: Receive data from modem failed\n", __func__);
 		return -EFAULT;
 	}
 
 	return 0;
 }
-#endif 
+#endif /* CONFIG_ARCH_MSM7X30 */
 
 static long htc_sdservice_ioctl(struct file *file, unsigned int command, unsigned long arg)
 {
 	htc_sdservice_msg_s hmsg;
-	htc_sec_ats_t amsg;
 	int ret = 0;
 
-	PDEBUG("command = %x", command);
+	PDEBUG("command = %x\n", command);
 	switch (command) {
 	case HTC_IOCTL_SDSERVICE:
 		if (copy_from_user(&hmsg, (void __user *)arg, sizeof(hmsg))) {
@@ -327,10 +318,10 @@ static long htc_sdservice_ioctl(struct file *file, unsigned int command, unsigne
 		}
 #ifdef CONFIG_ARCH_MSM7X30
 		oem_rapi_client_init2();
-#endif 
-		PDEBUG("func = %x", hmsg.func);
+#endif /* CONFIG_ARCH_MSM7X30 */
+		PDEBUG("func = %x\n", hmsg.func);
 		switch (hmsg.func) {
-		case ITEM_SD_KEY_ENCRYPT:
+		case HTC_SD_KEY_ENCRYPT:
 			if ((hmsg.req_buf == NULL) || (hmsg.req_len != HTC_SDKEY_LEN)) {
 				PERR("invalid arguments");
 				return -EFAULT;
@@ -343,19 +334,18 @@ static long htc_sdservice_ioctl(struct file *file, unsigned int command, unsigne
 			ret = oem_rapi_pack_send(OEM_RAPI_CLIENT_EVENT_SDSERVICE_ENC, htc_sdkey, hmsg.req_len);
 			oem_rapi_client_close2();
 #else
-			ret = secure_access_item(0, ITEM_SD_KEY_ENCRYPT, hmsg.req_len, htc_sdkey);
-#endif	
+			ret = secure_access_item(0, HTC_SD_KEY_ENCRYPT, hmsg.req_len, htc_sdkey);
+#endif	/* CONFIG_ARCH_MSM7X30 */
 			if (ret)
-				PERR("Encrypt SD key fail (%d)", ret);
+				PERR("Encrypt SD key fail (%d)\n", ret);
 
-			scm_inv_range((uint32_t)htc_sdkey, (uint32_t)htc_sdkey + HTC_SDKEY_LEN);
 			if (copy_to_user((void __user *)hmsg.resp_buf, htc_sdkey, hmsg.req_len)) {
 				PERR("copy_to_user error (sdkey)");
 				return -EFAULT;
 			}
 			break;
 
-		case ITEM_SD_KEY_DECRYPT:
+		case HTC_SD_KEY_DECRYPT:
 			if ((hmsg.req_buf == NULL) || (hmsg.req_len != HTC_SDKEY_LEN)) {
 				PERR("invalid arguments");
 				return -EFAULT;
@@ -368,12 +358,11 @@ static long htc_sdservice_ioctl(struct file *file, unsigned int command, unsigne
 			ret = oem_rapi_pack_send(OEM_RAPI_CLIENT_EVENT_SDSERVICE_DEC, htc_sdkey, hmsg.req_len);
 			oem_rapi_client_close2();
 #else
-			ret = secure_access_item(0, ITEM_SD_KEY_DECRYPT, hmsg.req_len, htc_sdkey);
-#endif	
+			ret = secure_access_item(0, HTC_SD_KEY_DECRYPT, hmsg.req_len, htc_sdkey);
+#endif	/* CONFIG_ARCH_MSM7X30 */
 			if (ret)
-				PERR("Encrypt SD key fail (%d)", ret);
+				PERR("Encrypt SD key fail (%d)\n", ret);
 
-			scm_inv_range((uint32_t)htc_sdkey, (uint32_t)htc_sdkey + HTC_SDKEY_LEN);
 			if (copy_to_user((void __user *)hmsg.resp_buf, htc_sdkey, hmsg.req_len)) {
 				PERR("copy_to_user error (sdkey)");
 				return -EFAULT;
@@ -381,46 +370,13 @@ static long htc_sdservice_ioctl(struct file *file, unsigned int command, unsigne
 			break;
 
 		default:
-			PERR("func error");
+			PERR("func error\n");
 			return -EFAULT;
 		}
-		break;
-
-	case HTC_IOCTL_SEC_ATS_GET:
-		if (!arg) {
-			PERR("invalid arguments");
-			return -ENOMEM;
-		}
-		ret = secure_access_item(0, ITEM_SEC_ATS, sizeof(htc_sec_ats_t), (unsigned char *)&amsg);
-		if (ret) {
-			PERR("ATS service fail (%d)", ret);
-			return ret;
-		}
-		scm_inv_range((uint32_t)&amsg, (uint32_t)&amsg + sizeof(htc_sec_ats_t));
-
-		if (copy_to_user((void __user *)arg, &amsg, sizeof(htc_sec_ats_t))) {
-			PERR("copy_to_user error (msg)");
-			return -EFAULT;
-		}
-		break;
-
-	case HTC_IOCTL_SEC_ATS_SET:
-		if (!arg) {
-			PERR("invalid arguments");
-			return -ENOMEM;
-		}
-		if (copy_from_user(&amsg, (void __user *)arg, sizeof(htc_sec_ats_t))) {
-			PERR("copy_from_user error (msg)");
-			return -EFAULT;
-		}
-		PDEBUG("func = %x, sizeof htc_sec_ats_t = %d", amsg.func_info.func_id, sizeof(htc_sec_ats_t));
-		ret = secure_access_item(1, ITEM_SEC_ATS, sizeof(htc_sec_ats_t), (unsigned char *)&amsg);
-		if (ret)
-			PERR("ATS service fail (%d)", ret);
 		break;
 
 	default:
-		PERR("command error");
+		PERR("command error\n");
 		return -EFAULT;
 	}
 	return ret;
@@ -450,13 +406,13 @@ static int __init htc_sdservice_init(void)
 
 	htc_sdkey = kzalloc(HTC_SDKEY_LEN, GFP_KERNEL);
 	if (htc_sdkey == NULL) {
-		PERR("allocate the space for SD key failed");
+		PERR("allocate the space for SD key failed\n");
 		return -1;
 	}
 
 	ret = register_chrdev(0, DEVICE_NAME, &htc_sdservice_fops);
 	if (ret < 0) {
-		PERR("register module fail");
+		PERR("register module fail\n");
 		return ret;
 	}
 	htc_sdservice_major = ret;
@@ -464,7 +420,7 @@ static int __init htc_sdservice_init(void)
 	htc_sdservice_class = class_create(THIS_MODULE, "htc_sdservice");
 	device_create(htc_sdservice_class, NULL, MKDEV(htc_sdservice_major, 0), NULL, DEVICE_NAME);
 
-	PDEBUG("register module ok");
+	PDEBUG("register module ok\n");
 	return 0;
 }
 
@@ -476,7 +432,7 @@ static void  __exit htc_sdservice_exit(void)
 	class_destroy(htc_sdservice_class);
 	unregister_chrdev(htc_sdservice_major, DEVICE_NAME);
 	kfree(htc_sdkey);
-	PDEBUG("un-registered module ok");
+	PDEBUG("un-registered module ok\n");
 }
 
 module_init(htc_sdservice_init);

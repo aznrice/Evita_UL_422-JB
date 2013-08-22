@@ -1,7 +1,6 @@
 #ifndef _ARCH_ARM_MACH_MSM_MDM_IOCTLS_H
 #define _ARXH_ARM_MACH_MSM_MDM_IOCTLS_H
 
-#define MODEM_ERRMSG_LEN	256			
 
 #define CHARM_CODE		0xCC
 #define WAKE_CHARM		_IO(CHARM_CODE, 1)
@@ -14,15 +13,6 @@
 #define GET_DLOAD_STATUS	_IOR(CHARM_CODE, 8, int)
 #define IMAGE_UPGRADE		_IOW(CHARM_CODE, 9, int)
 #define SHUTDOWN_CHARM		_IOW(CHARM_CODE, 10, int)
-#define FORCE_DLOAD			_IOW(CHARM_CODE, 11, int)
-
-#define GET_MFG_MODE   	_IO(CHARM_CODE, 94)     
-#define GET_RADIO_FLAG   	_IO(CHARM_CODE, 95)     
-#define SET_MODEM_ERRMSG	_IOW(CHARM_CODE, 96, char[MODEM_ERRMSG_LEN])	
-#define EFS_SYNC_DONE		_IO(CHARM_CODE, 99)	
-#define NV_WRITE_DONE		_IO(CHARM_CODE, 100)	
-#define HTC_POWER_OFF_CHARM		_IOW(CHARM_CODE, 101, int) 
-#define HTC_UPDATE_CRC_RESTART_LEVEL		_IOW(CHARM_CODE, 102, int) 
 
 enum charm_boot_type {
 	CHARM_NORMAL_BOOT = 0,
@@ -32,11 +22,5 @@ enum charm_boot_type {
 enum image_upgrade_type {
 	APQ_CONTROLLED_UPGRADE = 0,
 	MDM_CONTROLLED_UPGRADE,
-};
-
-enum mdm_bootloader_irq_state {
-	MDM_BOOTLOAER_GPIO_NOT_INITIALIZED,
-	MDM_BOOTLOAER_GPIO_IRQ_REGISTERED,
-	MDM_BOOTLOAER_GPIO_IRQ_RECEIVED,
 };
 #endif

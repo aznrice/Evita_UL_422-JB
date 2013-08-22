@@ -19,6 +19,8 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+/* Code inside mpudev_ioctl_rdrw is copied from i2c-dev.c
+ */
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <linux/interrupt.h>
@@ -60,6 +62,7 @@
 #define I(x...) printk(KERN_INFO "[GYRO][MPU3050] " x)
 #define E(x...) printk(KERN_ERR "[GYRO][MPU3050 ERROR] " x)
 
+/* Platform data for the MPU */
 struct mpu_private_data {
 	struct mldl_cfg mldl_cfg;
 
@@ -74,7 +77,6 @@ static struct i2c_client *this_client;
 
 int mpu_debug_flag;
 int mpu_sensors_reset;
-int mpu_lpm_flag;
 
 static int mpu_open(struct inode *inode, struct file *file)
 {
@@ -87,11 +89,11 @@ static int mpu_open(struct inode *inode, struct file *file)
 		current->pid);
 	pid = current->pid;
 	file->private_data = this_client;
-	
-	
-	
+	/* we could do some checking on the flags supplied by "open" */
+	/* i.e. O_NONBLOCK */
+	/* -> set some flag to disable interruptible_sleep_on in mpu_read */
 
-	
+	/* Reset the sensors to the default */
 	mldl_cfg->requested_sensors = ML_THREE_AXIS_GYRO;
 	if (mldl_cfg->accel && mldl_cfg->accel->resume)
 		mldl_cfg->requested_sensors |= ML_THREE_AXIS_ACCEL;
@@ -105,6 +107,7 @@ static int mpu_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
+/* close function - called when the "file" /dev/mpu is closed in userspace   */
 static int mpu_release(struct inode *inode, struct file *file)
 {
 	struct i2c_client *client =
@@ -144,6 +147,8 @@ static noinline int mpudev_ioctl_rdrw(struct i2c_client *client,
 			   sizeof(rdwr_arg)))
 		return -EFAULT;
 
+	/* Put an arbitrary limit on the number of messages that can
+	 * be sent at once */
 	if (rdwr_arg.nmsgs > I2C_RDRW_IOCTL_MAX_MSGS)
 		return -EINVAL;
 
@@ -167,6 +172,8 @@ static noinline int mpudev_ioctl_rdrw(struct i2c_client *client,
 
 	res = 0;
 	for (i = 0; i < rdwr_arg.nmsgs; i++) {
+		/* Limit the size of the message to a sane amount;
+		 * and don't let length change either. */
 		if ((rdwr_pa[i].len > 8192) ||
 		    (rdwr_pa[i].flags & I2C_M_RECV_LEN)) {
 			res = -EINVAL;
@@ -180,7 +187,7 @@ static noinline int mpudev_ioctl_rdrw(struct i2c_client *client,
 		}
 		if (copy_from_user(rdwr_pa[i].buf, data_ptrs[i],
 				   rdwr_pa[i].len)) {
-			++i;	
+			++i;	/* Needs to be kfreed too */
 			res = -EFAULT;
 			break;
 		}
@@ -208,6 +215,7 @@ static noinline int mpudev_ioctl_rdrw(struct i2c_client *client,
 	return res;
 }
 
+/* read function called when from /dev/mpu is read.  Read from the FIFO */
 static ssize_t mpu_read(struct file *file,
 			char __user *buf, size_t count, loff_t *offset)
 {
@@ -227,6 +235,7 @@ static ssize_t mpu_read(struct file *file,
 	pr_debug("i2c-dev: i2c-%d reading %zu bytes.\n",
 		 iminor(file->f_path.dentry->d_inode), count);
 
+/* @todo fix this to do a i2c trasnfer from the FIFO */
 	ret = i2c_master_recv(client, tmp, count);
 	if (ret >= 0) {
 		ret = copy_to_user(buf, tmp, count) ? -EFAULT : ret;
@@ -291,6 +300,10 @@ mpu_ioctl_set_mpu_config(struct i2c_client *client, unsigned long arg)
 	if (NULL == temp_mldl_cfg)
 		return -ENOMEM;
 
+	/*
+	 * User space is not allowed to modify accel compass pressure or
+	 * pdata structs, as well as silicon_revision product_id or trim
+	 */
 	if (copy_from_user(temp_mldl_cfg, (struct mldl_cfg __user *) arg,
 				offsetof(struct mldl_cfg, silicon_revision))) {
 		result = -EFAULT;
@@ -360,6 +373,8 @@ out:
 static int
 mpu_ioctl_get_mpu_config(struct i2c_client *client, unsigned long arg)
 {
+	/* Have to be careful as there are 3 pointers in the mldl_cfg
+	 * structure */
 	struct mpu_private_data *mpu =
 	    (struct mpu_private_data *) i2c_get_clientdata(client);
 	struct mldl_cfg *mldl_cfg = &mpu->mldl_cfg;
@@ -381,7 +396,7 @@ mpu_ioctl_get_mpu_config(struct i2c_client *client, unsigned long arg)
 		goto out;
 	}
 
-	
+	/* Fill in the accel, compass, pressure and pdata pointers */
 	if (mldl_cfg->accel) {
 		retval = copy_to_user((void __user *)local_mldl_cfg->accel,
 				      mldl_cfg->accel,
@@ -434,7 +449,7 @@ mpu_ioctl_get_mpu_config(struct i2c_client *client, unsigned long arg)
 		}
 	}
 
-	
+	/* Do not modify the accel, compass, pressure and pdata pointers */
 	retval = copy_to_user((struct mldl_cfg __user *) arg,
 			      mldl_cfg, offsetof(struct mldl_cfg, accel));
 
@@ -445,6 +460,16 @@ out:
 	return retval;
 }
 
+/**
+ * Pass a requested slave configuration to the slave sensor
+ *
+ * @param adapter the adaptor to use to communicate with the slave
+ * @param mldl_cfg the mldl configuration structuer
+ * @param slave pointer to the slave descriptor
+ * @param usr_config The configuration to pass to the slave sensor
+ *
+ * @return 0 or non-zero error code
+ */
 static int slave_config(void *adapter,
 			struct mldl_cfg *mldl_cfg,
 			struct ext_slave_descr *slave,
@@ -486,6 +511,16 @@ static int slave_config(void *adapter,
 	return retval;
 }
 
+/**
+ * Get a requested slave configuration from the slave sensor
+ *
+ * @param adapter the adaptor to use to communicate with the slave
+ * @param mldl_cfg the mldl configuration structuer
+ * @param slave pointer to the slave descriptor
+ * @param usr_config The configuration for the slave to fill out
+ *
+ * @return 0 or non-zero error code
+ */
 static int slave_get_config(void *adapter,
 			struct mldl_cfg *mldl_cfg,
 			struct ext_slave_descr *slave,
@@ -536,6 +571,7 @@ static int slave_get_config(void *adapter,
 	return retval;
 }
 
+/* ioctl - I/O control */
 static long mpu_ioctl(struct file *file,
 		      unsigned int cmd, unsigned long arg)
 {
@@ -739,8 +775,6 @@ static long mpu_ioctl(struct file *file,
 	case MPU_RESUME:
 	{
 		unsigned long sensors;
-
-
 		sensors = mldl_cfg->requested_sensors;
 		retval = mpu3050_resume(mldl_cfg,
 					client->adapter,
@@ -975,6 +1009,7 @@ int mpu_resume(struct i2c_client *client)
 	return 0;
 }
 
+/* define which file operations are supported */
 static const struct file_operations mpu_fops = {
 	.owner = THIS_MODULE,
 	.read = mpu_read,
@@ -992,7 +1027,7 @@ static unsigned short normal_i2c[] = { I2C_CLIENT_END };
 
 static struct miscdevice i2c_mpu_device = {
 	.minor = MISC_DYNAMIC_MINOR,
-	.name = "mpu", 
+	.name = "mpu", /* Same for both 3050 and 6000 */
 	.fops = &mpu_fops,
 };
 
@@ -1096,47 +1131,6 @@ static DEVICE_ATTR(mpu_sensors_reset, 0664, mpu_sensors_reset_show, \
 		mpu_sensors_reset_store);
 
 
-static ssize_t mpu_lpm_flag_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	char *s = buf;
-
-	s += sprintf(s, "%d", mpu_lpm_flag);
-
-	return s - buf;
-}
-#ifdef CONFIG_CIR_ALWAYS_READY
-extern int cir_flag;
-#endif
-static ssize_t mpu_lpm_flag_store(struct device *dev,
-				struct device_attribute *attr,
-				const char *buf, size_t count)
-{
-	struct mpu_private_data *mpu =
-	    (struct mpu_private_data *) i2c_get_clientdata(this_client);
-	struct mldl_cfg *mldl_cfg = &mpu->mldl_cfg;
-
-	mpu_lpm_flag = -1;
-	sscanf(buf, "%d", &mpu_lpm_flag);
-#ifdef CONFIG_CIR_ALWAYS_READY
-	
-	if ((mpu_lpm_flag == 1) && mldl_cfg->pdata->power_LPM && !cir_flag)
-#else
-	if ((mpu_lpm_flag == 1) && mldl_cfg->pdata->power_LPM)
-#endif
-		mldl_cfg->pdata->power_LPM(1);
-	else if (mldl_cfg->pdata->power_LPM)
-		mldl_cfg->pdata->power_LPM(0);
-
-	D("%s: mpu_lpm_flag = %d\n", __func__, mpu_lpm_flag);
-
-	return count;
-}
-
-static DEVICE_ATTR(mpu_lpm_flag, 0664, mpu_lpm_flag_show, \
-		mpu_lpm_flag_store);
-
-
 int mpu3050_probe(struct i2c_client *client,
 		  const struct i2c_device_id *devid)
 {
@@ -1193,10 +1187,6 @@ int mpu3050_probe(struct i2c_client *client,
 					"Installing Accel irq using %d\n",
 					pdata->accel.irq);
 				res = slaveirq_init(accel_adapter,
-
-#ifdef CONFIG_CIR_ALWAYS_READY
-						this_client,
-#endif
 						&pdata->accel,
 						"accelirq");
 				if (res)
@@ -1223,9 +1213,6 @@ int mpu3050_probe(struct i2c_client *client,
 					"Installing Compass irq using %d\n",
 					pdata->compass.irq);
 				res = slaveirq_init(compass_adapter,
-#ifdef CONFIG_CIR_ALWAYS_READY
-						NULL,
-#endif
 						&pdata->compass,
 						"compassirq");
 				if (res)
@@ -1253,9 +1240,6 @@ int mpu3050_probe(struct i2c_client *client,
 					"Installing Pressure irq using %d\n",
 					pdata->pressure.irq);
 				res = slaveirq_init(pressure_adapter,
-#ifdef CONFIG_CIR_ALWAYS_READY
-						NULL,
-#endif
 						&pdata->pressure,
 						"pressureirq");
 				if (res)
@@ -1326,44 +1310,32 @@ int mpu3050_probe(struct i2c_client *client,
 		goto err_create_mpu_device;
 	}
 
-	
+	/* register the attributes */
 	res = device_create_file(mpu3050_dev, &dev_attr_pwr_reg);
 	if (res) {
 		E("%s, create mpu3050_device_create_file fail!\n", __func__);
 		goto err_create_mpu_device_file;
 	}
 
-	
+	/* register the attributes */
 	res = device_create_file(mpu3050_dev, &dev_attr_mpu_debug_flag);
 	if (res) {
 		E("%s, create mpu3050_device_create_file fail!\n", __func__);
 		goto err_create_mpu_device_mpu_debug_flag_file;
 	}
 
-	
+	/* register the attributes */
 	res = device_create_file(mpu3050_dev, &dev_attr_mpu_sensors_reset);
 	if (res) {
 		E("%s, create mpu3050_device_create_file fail!\n", __func__);
 		goto err_create_mpu_device_sensors_reset_flag_file;
 	}
 
-	
-	res = device_create_file(mpu3050_dev, &dev_attr_mpu_lpm_flag);
-	if (res) {
-		E("%s, create mpu3050_device_create_file fail!\n", __func__);
-		goto err_create_mpu_device_mpu_lpm_flag_file;
-	}
-
 	mpu_debug_flag = 0;
 	mpu_sensors_reset = 0;
-	mpu_lpm_flag = 0;
-	D("%s: MPU3050 probe success v02-Fix set ODR G-Sensor issue\n",
-		__func__);
 
 	return res;
 
-err_create_mpu_device_mpu_lpm_flag_file:
-	device_remove_file(mpu3050_dev, &dev_attr_mpu_sensors_reset);
 err_create_mpu_device_sensors_reset_flag_file:
 	device_remove_file(mpu3050_dev, &dev_attr_mpu_debug_flag);
 err_create_mpu_device_mpu_debug_flag_file:
@@ -1466,9 +1438,9 @@ static struct i2c_driver mpu3050_driver = {
 		   .name = MPU_NAME,
 		   },
 	.address_list = normal_i2c,
-	.shutdown = mpu_shutdown,	
-	.suspend = mpu_suspend,	
-	.resume = mpu_resume,	
+	.shutdown = mpu_shutdown,	/* optional */
+	.suspend = mpu_suspend,	/* optional */
+	.resume = mpu_resume,	/* optional */
 
 };
 

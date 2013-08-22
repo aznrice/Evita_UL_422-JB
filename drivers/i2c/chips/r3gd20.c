@@ -48,8 +48,6 @@
 
 #include <linux/r3gd20.h>
 #include <linux/delay.h>
-#include <linux/export.h>
-#include <linux/module.h>
 
 #define D(x...) printk(KERN_DEBUG "[GYRO][R3GD20] " x)
 #define I(x...) printk(KERN_INFO "[GYRO][R3GD20] " x)
@@ -58,22 +56,25 @@
 	if (debug_flag) \
 		printk(KERN_DEBUG "[GYRO][R3GD20 DEBUG] " x)
 
+/** Maximum polled-device-reported rot speed value value in dps*/
 #define FS_MAX			32768
 
+/* r3gd20 gyroscope registers */
 #define WHO_AM_I        0x0F
 
-#define CTRL_REG1       0x20    
-#define CTRL_REG2       0x21    
-#define CTRL_REG3       0x22    
-#define CTRL_REG4       0x23    
-#define CTRL_REG5       0x24    
-#define	REFERENCE	0x25    
-#define	FIFO_CTRL_REG	0x2E    
-#define FIFO_SRC_REG	0x2F    
-#define	OUT_X_L		0x28    
+#define CTRL_REG1       0x20    /* CTRL REG1 */
+#define CTRL_REG2       0x21    /* CTRL REG2 */
+#define CTRL_REG3       0x22    /* CTRL_REG3 */
+#define CTRL_REG4       0x23    /* CTRL_REG4 */
+#define CTRL_REG5       0x24    /* CTRL_REG5 */
+#define	REFERENCE	0x25    /* REFERENCE REG */
+#define	FIFO_CTRL_REG	0x2E    /* FIFO CONTROL REGISTER */
+#define FIFO_SRC_REG	0x2F    /* FIFO SOURCE REGISTER */
+#define	OUT_X_L		0x28    /* 1st AXIS OUT REG of 6 */
 
 #define AXISDATA_REG	OUT_X_L
 
+/* CTRL_REG1 */
 #define ALL_ZEROES	0x00
 #define PM_OFF		0x00
 #define PM_NORMAL	0x08
@@ -83,11 +84,12 @@
 #define BW01		0x10
 #define BW10		0x20
 #define BW11		0x30
-#define ODR095		0x00  
-#define ODR190		0x40  
-#define ODR380		0x80  
-#define ODR760		0xC0  
+#define ODR095		0x00  /* ODR =  95Hz */
+#define ODR190		0x40  /* ODR = 190Hz */
+#define ODR380		0x80  /* ODR = 380Hz */
+#define ODR760		0xC0  /* ODR = 760Hz */
 
+/* CTRL_REG3 bits */
 #define	I2_DRDY		0x08
 #define	I2_WTM		0x04
 #define	I2_OVRUN	0x02
@@ -95,12 +97,15 @@
 #define	I2_NONE		0x00
 #define	I2_MASK		0x0F
 
+/* CTRL_REG4 bits */
 #define	FS_MASK				0x30
 #define	BDU_ENABLE			0x80
 
+/* CTRL_REG5 bits */
 #define	FIFO_ENABLE	0x40
 #define HPF_ENALBE	0x11
 
+/* FIFO_CTRL_REG bits */
 #define	FIFO_MODE_MASK		0xE0
 #define	FIFO_MODE_BYPASS	0x00
 #define	FIFO_MODE_FIFO		0x20
@@ -116,6 +121,7 @@
 #define FLAT			0
 #define I2C_AUTO_INCREMENT		0x80
 
+/* RESUME STATE INDICES */
 #define	RES_CTRL_REG1		0
 #define	RES_CTRL_REG2		1
 #define	RES_CTRL_REG3		2
@@ -134,13 +140,19 @@
 
 #define HW_WAKE_UP_TIME 160
 
-#define WHOAMI_R3GD20		0x00D4	
+/** Registers Contents */
+#define WHOAMI_R3GD20		0x00D4	/* Expected content for WAI register*/
 
+/*
+ * R3GD20 gyroscope data
+ * brief structure containing gyroscope values for yaw, pitch and roll in
+ * signed short
+ */
 
 struct r3gd20_triple {
-	short	x,	
-		y,	
-		z;	
+	short	x,	/* x-axis angular rate data. */
+		y,	/* y-axis angluar rate data. */
+		z;	/* z-axis angular rate data. */
 };
 
 struct output_rate {
@@ -156,6 +168,7 @@ static const struct output_rate odr_table[] = {
 	{	11,	ODR095|BW00},
 };
 
+static int use_smbus;
 
 static const struct r3gd20_gyr_platform_data default_r3gd20_gyr_pdata = {
 	.fs_range = R3GD20_GYR_FS_2000DPS,
@@ -167,10 +180,10 @@ static const struct r3gd20_gyr_platform_data default_r3gd20_gyr_pdata = {
 	.negate_z = 0,
 
 	.poll_interval = 50,
-	.min_interval = R3GD20_MIN_POLL_PERIOD_MS, 
+	.min_interval = R3GD20_MIN_POLL_PERIOD_MS, /*2 */
 
-	
-			
+	/*.gpio_int1 = DEFAULT_INT1_GPIO,*/
+	/*.gpio_int2 = DEFAULT_INT2_GPIO,*/		/* int for fifo */
 
 	.watermark = 0,
 	.fifomode = 0,
@@ -179,7 +192,7 @@ static const struct r3gd20_gyr_platform_data default_r3gd20_gyr_pdata = {
 #ifdef HTC_WQ
 static void polling_do_work(struct work_struct *w);
 static DECLARE_DELAYED_WORK(polling_work, polling_do_work);
-#endif 
+#endif /* HTC_WQ */
 
 struct r3gd20_data {
 	struct i2c_client *client;
@@ -203,22 +216,20 @@ struct r3gd20_data {
 #ifdef HTC_WQ
 	struct workqueue_struct *gyro_wq;
 	struct input_dev *gyro_input_dev;
-#endif 
+#endif /* HTC_WQ */
 
 #ifdef HTC_ATTR
 	struct class *htc_gyro_class;
 	struct device *gyro_dev;
-#endif 
+#endif /* HTC_ATTR */
 	int cali_data_x;
 	int cali_data_y;
 	int cali_data_z;
-
-	int is_suspended;
 };
 
 #ifdef HTC_WQ
 struct r3gd20_data *g_gyro;
-#endif 
+#endif /* HTC_WQ */
 
 static int debug_flag;
 
@@ -229,7 +240,14 @@ static int r3gd20_i2c_read(struct r3gd20_data *gyr,
 	u8 reg = buf[0];
 	u8 cmd = reg;
 
-#if 0
+/*
+	if (len > sizeof(buf))
+			dev_err(&gyr->client->dev,
+				"read error insufficient buffer length: "
+				"len:%d, buf size=%d\n",
+				len, sizeof(buf));
+*/
+
 	if (use_smbus) {
 		if (len == 1) {
 			ret = i2c_smbus_read_byte_data(gyr->client, cmd);
@@ -241,7 +259,7 @@ static int r3gd20_i2c_read(struct r3gd20_data *gyr,
 				ret, len, cmd , buf[0]);
 #endif
 		} else if (len > 1) {
-			
+			/*cmd =  = I2C_AUTO_INCREMENT | reg;*/
 			ret = i2c_smbus_read_i2c_block_data(gyr->client,
 								cmd, len, buf);
 #if DEBUG
@@ -263,12 +281,12 @@ static int r3gd20_i2c_read(struct r3gd20_data *gyr,
 			dev_err(&gyr->client->dev,
 				"read transfer error: len:%d, command=0x%02x\n",
 				len, cmd);
-			return 0; 
+			return 0; /* failure*/
 		}
-		return len; 
+		return len; /* success*/
 	}
-#endif 
-	
+
+	/*cmd =  = I2C_AUTO_INCREMENT | reg;*/
 	ret = i2c_master_send(gyr->client, &cmd, sizeof(cmd));
 	if (ret != sizeof(cmd))
 		return ret;
@@ -283,7 +301,7 @@ static int r3gd20_i2c_write(struct r3gd20_data *gyr, u8 *buf, int len)
 
 	reg = buf[0];
 	value = buf[1];
-#if 0
+
 	if (use_smbus) {
 		if (len == 1) {
 			ret = i2c_smbus_write_byte_data(gyr->client, reg, value);
@@ -311,7 +329,7 @@ static int r3gd20_i2c_write(struct r3gd20_data *gyr, u8 *buf, int len)
 			return ret;
 		}
 	}
-#endif 
+
 	ret = i2c_master_send(gyr->client, buf, len+1);
 	return (ret == len+1) ? 0 : ret;
 }
@@ -322,6 +340,8 @@ static int r3gd20_register_write(struct r3gd20_data *gyro, u8 *buf,
 {
 	int err;
 
+		/* Sets configuration register at reg_address
+		 *  NOTE: this is a straight overwrite  */
 		buf[0] = reg_address;
 		buf[1] = new_value;
 		err = r3gd20_i2c_write(gyro, buf, 1);
@@ -398,6 +418,10 @@ static int r3gd20_update_fifomode(struct r3gd20_data *gyro, u8 fifomode)
 		E("%s : failed to update fifoMode\n", __func__);
 		return res;
 	}
+	/*
+	I("%s : new_value:0x%02x,prev fifomode:0x%02x\n", __func__,
+			new_value, gyro->pdata->fifomode);
+	*/
 	gyro->resume_state[RES_FIFO_CTRL_REG] =
 		((FIFO_MODE_MASK & new_value) |
 		(~FIFO_MODE_MASK &
@@ -451,6 +475,14 @@ static int r3gd20_manage_int2settings(struct r3gd20_data *gyro,
 	bool enable_fifo_hw;
 	bool recognized_mode = false;
 	u8 int2bits = I2_NONE;
+/*
+	if (gyro->polling_enabled) {
+		fifomode = FIFO_MODE_BYPASS;
+		I("%s : in polling mode, fifo mode forced"
+							" to BYPASS mode\n",
+			R3GD20_GYR_DEV_NAME);
+	}
+*/
 
 
 	switch (fifomode) {
@@ -560,6 +592,8 @@ static int r3gd20_update_odr(struct r3gd20_data *gyro,
 	config[1] = odr_table[i].mask;
 	config[1] |= (ENABLE_ALL_AXES + PM_NORMAL);
 
+	/* If device is currently enabled, we need to write new
+	 *  configuration out to it */
 	if (atomic_read(&gyro->enabled)) {
 		config[0] = CTRL_REG1;
 		err = r3gd20_i2c_write(gyro, config, 1);
@@ -572,12 +606,13 @@ static int r3gd20_update_odr(struct r3gd20_data *gyro,
 	return err;
 }
 
+/* gyroscope data readout */
 static int r3gd20_get_data(struct r3gd20_data *gyro,
 			     struct r3gd20_triple *data)
 {
 	int err;
 	unsigned char gyro_out[6];
-	
+	/* y,p,r hardware data */
 	s16 hw_d[3] = { 0 };
 
 	gyro_out[0] = (I2C_AUTO_INCREMENT | AXISDATA_REG);
@@ -611,7 +646,7 @@ static void r3gd20_report_values(struct r3gd20_data *gyr,
 
 #ifdef HTC_WQ
 	input = g_gyro->gyro_input_dev;
-#endif 
+#endif /* HTC_WQ */
 
 	input_report_abs(input, ABS_X, data->x);
 	input_report_abs(input, ABS_Y, data->y);
@@ -635,16 +670,14 @@ static void polling_do_work(struct work_struct *w)
 
 	mutex_unlock(&gyro->lock);
 
-	DIF("interval = %d, gyro->is_suspended = %d\n", gyro->input_poll_dev->
-					 poll_interval, gyro->is_suspended);
+	DIF("interval = %d\n", gyro->input_poll_dev->
+					 poll_interval);
 
-	if (gyro->is_suspended != 1) {
-		queue_delayed_work(gyro->gyro_wq, &polling_work,
-			msecs_to_jiffies(gyro->input_poll_dev->
-						 poll_interval));
-	}
+	queue_delayed_work(gyro->gyro_wq, &polling_work,
+		msecs_to_jiffies(gyro->input_poll_dev->
+					 poll_interval));
 }
-#endif 
+#endif /* HTC_WQ */
 
 static int r3gd20_hw_init(struct r3gd20_data *gyro)
 {
@@ -689,15 +722,15 @@ static void r3gd20_device_power_off(struct r3gd20_data *dev_data)
 		dev_err(&dev_data->client->dev, "soft power off failed\n");
 
 	if (dev_data->pdata->power_off) {
-		
+		/*disable_irq_nosync(acc->irq1);*/
 		disable_irq_nosync(dev_data->irq2);
 		dev_data->pdata->power_off();
 		dev_data->hw_initialized = 0;
 	}
 
 	if (dev_data->hw_initialized) {
-		
-		
+		/*if (dev_data->pdata->gpio_int1 >= 0)*/
+		/*	disable_irq_nosync(dev_data->irq1);*/
 		if (dev_data->pdata->gpio_int2 > 0) {
 			disable_irq_nosync(dev_data->irq2);
 			I("%s: power off: irq2 disabled\n",
@@ -729,6 +762,11 @@ static int r3gd20_device_power_on(struct r3gd20_data *dev_data)
 	}
 
 	if (dev_data->hw_initialized) {
+		/*if (dev_data->pdata->gpio_int1) {
+		enable_irq(dev_data->irq1);
+		I("%s: power on: irq1 enabled\n",
+					R3GD20_GYR_DEV_NAME);
+		}*/
 		D("dev_data->pdata->gpio_int2 = %d\n", dev_data->pdata->gpio_int2);
 		if (dev_data->pdata->gpio_int2 > 0) {
 			enable_irq(dev_data->irq2);
@@ -747,8 +785,6 @@ static int r3gd20_enable(struct r3gd20_data *dev_data)
 	D("%s: enabled = %d\n", __func__, atomic_read(&dev_data->enabled));
 
 	if (!atomic_cmpxchg(&dev_data->enabled, 0, 1)) {
-		if (dev_data->pdata->power_LPM)
-			dev_data->pdata->power_LPM(0);
 
 		err = r3gd20_device_power_on(dev_data);
 		if (err < 0) {
@@ -765,7 +801,7 @@ static int r3gd20_enable(struct r3gd20_data *dev_data)
 				__func__, dev_data->input_poll_dev->poll_interval);
 		schedule_delayed_work(&dev_data->input_poll_dev->work,
 				      msecs_to_jiffies(dev_data->input_poll_dev->poll_interval));
-#endif 
+#endif /* HTC_WQ */
 	}
 
 	return 0;
@@ -783,14 +819,11 @@ static int r3gd20_disable(struct r3gd20_data *dev_data)
 	DIF("%s: dev_data->enabled = %d\n", __func__,
 		atomic_read(&dev_data->enabled));
 
-	if (dev_data->pdata->power_LPM)
-		dev_data->pdata->power_LPM(1);
-
 #ifdef HTC_WQ
 	cancel_delayed_work_sync(&polling_work);
 #else
 	cancel_delayed_work_sync(&dev_data->input_poll_dev->work);
-#endif 
+#endif /* HTC_WQ */
 
 	return 0;
 }
@@ -800,7 +833,7 @@ static ssize_t attr_polling_rate_show(struct device *dev,
 				     char *buf)
 {
 	int val;
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 
 	mutex_lock(&gyro->lock);
@@ -813,7 +846,7 @@ static ssize_t attr_polling_rate_store(struct device *dev,
 				     struct device_attribute *attr,
 				     const char *buf, size_t size)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	unsigned long interval_ms;
 
@@ -834,7 +867,7 @@ static ssize_t attr_polling_rate_store(struct device *dev,
 static ssize_t attr_range_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	int range = 0;
 	u8 val;
@@ -853,7 +886,7 @@ static ssize_t attr_range_show(struct device *dev,
 		break;
 	}
 	mutex_unlock(&gyro->lock);
-	
+	/*return sprintf(buf, "0x%02x\n", val);*/
 	return sprintf(buf, "%d\n", range);
 }
 
@@ -861,7 +894,7 @@ static ssize_t attr_range_store(struct device *dev,
 			      struct device_attribute *attr,
 			      const char *buf, size_t size)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	unsigned long val;
 	if (strict_strtoul(buf, 10, &val))
@@ -876,7 +909,7 @@ static ssize_t attr_range_store(struct device *dev,
 static ssize_t attr_enable_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	int val = atomic_read(&gyro->enabled);
 
@@ -887,7 +920,7 @@ static ssize_t attr_enable_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t size)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	unsigned long val;
 
@@ -908,7 +941,7 @@ static ssize_t attr_polling_mode_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
 	int val = 0;
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 
 	mutex_lock(&gyro->lock);
@@ -922,7 +955,7 @@ static ssize_t attr_polling_mode_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t size)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	unsigned long val;
 
@@ -934,7 +967,9 @@ static ssize_t attr_polling_mode_store(struct device *dev,
 		gyro->polling_enabled = true;
 		r3gd20_manage_int2settings(gyro, FIFO_MODE_BYPASS);
 		if (gyro->polling_enabled) {
-			D("polling enabled\n");
+			E("polling enabled\n");
+			/*
+			*/
 #ifdef HTC_WQ
 			queue_delayed_work(gyro->gyro_wq, &polling_work,
 					   msecs_to_jiffies(gyro->input_poll_dev->
@@ -943,16 +978,16 @@ static ssize_t attr_polling_mode_store(struct device *dev,
 			schedule_delayed_work(&gyro->input_poll_dev->work,
 					msecs_to_jiffies(gyro->
 							pdata->poll_interval));
-#endif 
+#endif /* HTC_WQ */
 		}
 	} else {
 		if (gyro->polling_enabled) {
-			D("polling disabled\n");
+			E("polling disabled\n");
 #ifdef HTC_WQ
 			cancel_delayed_work_sync(&polling_work);
 #else
 			cancel_delayed_work_sync(&gyro->input_poll_dev->work);
-#endif 
+#endif /* HTC_WQ */
 		}
 		gyro->polling_enabled = false;
 		r3gd20_manage_int2settings(gyro, gyro->pdata->fifomode);
@@ -965,7 +1000,7 @@ static ssize_t attr_watermark_store(struct device *dev,
 				     struct device_attribute *attr,
 				     const char *buf, size_t size)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	unsigned long watermark;
 	int res;
@@ -983,7 +1018,7 @@ static ssize_t attr_watermark_store(struct device *dev,
 static ssize_t attr_watermark_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	int val = gyro->pdata->watermark;
 	return sprintf(buf, "0x%02x\n", val);
@@ -993,13 +1028,15 @@ static ssize_t attr_fifomode_store(struct device *dev,
 				     struct device_attribute *attr,
 				     const char *buf, size_t size)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	unsigned long fifomode;
 	int res;
 
 	if (strict_strtoul(buf, 16, &fifomode))
 		return -EINVAL;
+	/*if (!fifomode)
+		return -EINVAL;*/
 
 	D("%s, got value:0x%02x\n", __func__, (u8)fifomode);
 
@@ -1015,7 +1052,7 @@ static ssize_t attr_fifomode_store(struct device *dev,
 static ssize_t attr_fifomode_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	u8 val = gyro->pdata->fifomode;
 	return sprintf(buf, "0x%02x\n", val);
@@ -1026,7 +1063,7 @@ static ssize_t attr_reg_set(struct device *dev, struct device_attribute *attr,
 				const char *buf, size_t size)
 {
 	int rc;
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	u8 x[2];
 	unsigned long val;
@@ -1045,7 +1082,7 @@ static ssize_t attr_reg_get(struct device *dev, struct device_attribute *attr,
 				char *buf)
 {
 	ssize_t ret;
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	int rc;
 	u8 data;
@@ -1061,7 +1098,7 @@ static ssize_t attr_reg_get(struct device *dev, struct device_attribute *attr,
 static ssize_t attr_addr_set(struct device *dev, struct device_attribute *attr,
 				const char *buf, size_t size)
 {
-	
+	/*struct r3gd20_data *gyro = dev_get_drvdata(dev);*/
 	struct r3gd20_data *gyro = g_gyro;
 	unsigned long val;
 
@@ -1076,7 +1113,7 @@ static ssize_t attr_addr_set(struct device *dev, struct device_attribute *attr,
 
 	return size;
 }
-#endif 
+#endif /* DEBUG */
 
 static ssize_t attr_debug_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
@@ -1215,7 +1252,7 @@ err_create_gyro_device:
 err_create_class:
 	return ret;
 
-#else 
+#else /* HTC_ATTR */
 
 	for (i = 0; i < ARRAY_SIZE(attributes); i++)
 		if (device_create_file(dev, attributes + i))
@@ -1228,7 +1265,7 @@ error:
 	dev_err(dev, "%s:Unable to create interface\n", __func__);
 	return -1;
 
-#endif 
+#endif /* HTC_ATTR */
 
 }
 
@@ -1265,8 +1302,10 @@ static void r3gd20_input_poll_func(struct input_polled_dev *dev)
 	if (atomic_read(&gyro->enabled) == 0)
 		return;
 
-	
+	/*D("%s++\n", __func__);*/
 
+	/* dev_data = container_of((struct delayed_work *)work,
+				 struct r3gd20_data, input_work); */
 
 	mutex_lock(&gyro->lock);
 	err = r3gd20_get_data(gyro, &data_out);
@@ -1293,34 +1332,40 @@ static void r3gd20_irq2_fifo(struct r3gd20_data *gyro)
 	workingmode = gyro->pdata->fifomode;
 
 
-	
+	/*I("%s : fifomode:0x%02x\n", __func__, workingmode);*/
 
 
 	switch (workingmode) {
 	case FIFO_MODE_BYPASS:
 	{
+		/*I("%s : fifomode:0x%02x\n", __func__,
+							gyro->pdata->fifomode);*/
 		report_triple(gyro);
 		break;
 	}
 	case FIFO_MODE_FIFO:
 		samples = (gyro->pdata->watermark)+1;
-		
+		/*I("%s : FIFO_SRC_REG init samples:%d\n", __func__, samples);*/
 		err = r3gd20_register_read(gyro, buf, FIFO_SRC_REG);
 		if (err > 0)
 			dev_err(&gyro->client->dev, "error reading fifo source reg\n");
 
 		int_source = buf[0];
-		
+		/*I("%s : FIFO_SRC_REG content:0x%02x\n", __func__, int_source);*/
 
 		stored_samples = int_source & FIFO_STORED_DATA_MASK;
+		/*I("%s : fifomode:0x%02x\n", __func__,
+							gyro->pdata->fifomode);*/
 
+		/*I("%s : samples:%d stored:%d\n", __func__,
+							samples,stored_samples);*/
 
 		for (; samples > 0; samples--) {
 #if DEBUG
 			input_report_abs(gyro->input_poll_dev->input, ABS_MISC, 1);
 			input_sync(gyro->input_poll_dev->input);
 #endif
-			
+			/*I("%s : current sample:%d\n", __func__, samples);*/
 			report_triple(gyro);
 
 #if DEBUG
@@ -1359,9 +1404,12 @@ static void r3gd20_irq2_work_func(struct work_struct *work)
 
 	struct r3gd20_data *gyro =
 	container_of(work, struct r3gd20_data, irq2_work);
+	/* TODO  add interrupt service procedure.
+		 ie:r3gd20_XXX(gyro); */
 	r3gd20_irq2_fifo(gyro);
-	
+	/*  */
 	I("%s: IRQ2 served\n", R3GD20_GYR_DEV_NAME);
+/*exit:*/
 	enable_irq(gyro->irq2);
 }
 
@@ -1372,7 +1420,7 @@ int r3gd20_input_open(struct input_dev *input)
 
 	DIF("%s:\n", __func__);
 
-	
+	/* Do not call r3gd20_enable() */
 	return 0;
 
 	return r3gd20_enable(gyro);
@@ -1387,7 +1435,7 @@ void r3gd20_input_close(struct input_dev *dev)
 
 static int r3gd20_validate_pdata(struct r3gd20_data *gyro)
 {
-	
+	/* checks for correctness of minimal polling period */
 	gyro->pdata->min_interval =
 		max((unsigned int) R3GD20_MIN_POLL_PERIOD_MS,
 						gyro->pdata->min_interval);
@@ -1406,7 +1454,7 @@ static int r3gd20_validate_pdata(struct r3gd20_data *gyro)
 		return -EINVAL;
 	}
 
-	
+	/* Only allow 0 and 1 for negation boolean flag */
 	if (gyro->pdata->negate_x > 1 ||
 	    gyro->pdata->negate_y > 1 ||
 	    gyro->pdata->negate_z > 1) {
@@ -1418,7 +1466,7 @@ static int r3gd20_validate_pdata(struct r3gd20_data *gyro)
 		return -EINVAL;
 	}
 
-	
+	/* Enforce minimum polling interval */
 	if (gyro->pdata->poll_interval < gyro->pdata->min_interval) {
 		dev_err(&gyro->client->dev,
 			"minimum poll interval violated\n");
@@ -1432,7 +1480,7 @@ static int r3gd20_input_init(struct r3gd20_data *gyro)
 	int err = -1;
 	struct input_dev *input;
 
-	
+	/*D("%s++\n", __func__);*/
 
 	gyro->input_poll_dev = input_allocate_polled_device();
 	if (!gyro->input_poll_dev) {
@@ -1455,7 +1503,7 @@ static int r3gd20_input_init(struct r3gd20_data *gyro)
 	gyro->gyro_input_dev = input;
 #else
 	input = gyro->input_poll_dev->input;
-#endif 
+#endif /* HTC_WQ */
 
 	input->open = r3gd20_input_open;
 	input->close = r3gd20_input_close;
@@ -1467,7 +1515,7 @@ static int r3gd20_input_init(struct r3gd20_data *gyro)
 	input_set_drvdata(input, gyro);
 #else
 	input_set_drvdata(gyro->input_poll_dev->input, gyro);
-#endif 
+#endif /* HTC_WQ */
 
 	set_bit(EV_ABS, input->evbit);
 
@@ -1529,21 +1577,27 @@ static int r3gd20_probe(struct i2c_client *client,
 {
 	struct r3gd20_data *gyro;
 
-	
+	u32 smbus_func = I2C_FUNC_SMBUS_BYTE_DATA |
+			I2C_FUNC_SMBUS_WORD_DATA | I2C_FUNC_SMBUS_I2C_BLOCK ;
 
 	int err = -1;
 
 	I("%s: probe start v03.\n", R3GD20_GYR_DEV_NAME);
 
-	
+	/* Support for both I2C and SMBUS adapter interfaces. */
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		dev_warn(&client->dev, "client not i2c capable\n");
-		
-		err = -ENODEV;
-		goto err0;
+		if (i2c_check_functionality(client->adapter, smbus_func)) {
+			use_smbus = 1;
+			dev_warn(&client->dev, "client using SMBUS\n");
+		} else {
+			err = -ENODEV;
+			dev_err(&client->dev, "client nor SMBUS capable\n");
+			goto err0;
+		}
 	}
 
-	
+	/* TODO check chip ID */
 
 	gyro = kzalloc(sizeof(*gyro), GFP_KERNEL);
 	if (gyro == NULL) {
@@ -1601,7 +1655,6 @@ static int r3gd20_probe(struct i2c_client *client,
 	gyro->resume_state[RES_FIFO_CTRL_REG] = ALL_ZEROES;
 
 	gyro->polling_enabled = true;
-	gyro->is_suspended = 0;
 
 	err = r3gd20_device_power_on(gyro);
 	if (err < 0) {
@@ -1636,7 +1689,7 @@ static int r3gd20_probe(struct i2c_client *client,
 
 	r3gd20_device_power_off(gyro);
 
-	
+	/* As default, do not report information */
 	atomic_set(&gyro->enabled, 0);
 
 
@@ -1683,7 +1736,7 @@ static int r3gd20_probe(struct i2c_client *client,
 		err = -ENOMEM;
 		goto err_create_singlethread_workqueue;
 	}
-#endif 
+#endif /* HTC_WQ */
 	debug_flag = 0;
 
 	I("%s: %s probed: device created successfully\n",
@@ -1691,10 +1744,13 @@ static int r3gd20_probe(struct i2c_client *client,
 
 	return 0;
 
+/*err7:
+	free_irq(gyro->irq2, gyro);
+*/
 
 #ifdef HTC_WQ
 err_create_singlethread_workqueue:
-#endif 
+#endif /* HTC_WQ */
 err6:
 	destroy_workqueue(gyro->irq2_work_queue);
 err5:
@@ -1724,6 +1780,12 @@ static int r3gd20_remove(struct i2c_client *client)
 	I("R3GD20 driver removing\n");
 #endif
 
+	/*if (gyro->pdata->gpio_int1)
+	{
+	free_irq(gyro->irq1, gyro);
+	gpio_free(gyro->pdata->gpio_int1);
+	destroy_workqueue(gyro->irq1_work_queue);
+	}*/
 	if (gyro->pdata->gpio_int2 > 0) {
 		free_irq(gyro->irq2, gyro);
 		gpio_free(gyro->pdata->gpio_int2);
@@ -1743,45 +1805,42 @@ static int r3gd20_remove(struct i2c_client *client)
 
 static int r3gd20_suspend(struct i2c_client *client, pm_message_t mesg)
 {
+/*#define SLEEP*/
 #ifdef CONFIG_SUSPEND
 	struct r3gd20_data *data = i2c_get_clientdata(client);
 	u8 buf[2];
 	int err = -1;
 
-	data->is_suspended = 1;
-	I("%s++: data->is_suspended = %d\n", __func__, data->is_suspended);
+	DIF("%s: ++\n", __func__);
 
 #if DEBUG
 	I("r3gd20_suspend\n");
-#endif 
+#endif /* DEBUG */
 
-	
+	/*if (atomic_read(&data->enabled)) {*/
+		mutex_lock(&data->lock);
 		if (data->polling_enabled) {
-			D("polling disabled\n");
+			E("polling disabled\n");
 #ifdef HTC_WQ
 			cancel_delayed_work_sync(&polling_work);
-#else 
+#else /* HTC_WQ */
 			cancel_delayed_work_sync(&data->input_poll_dev->work);
-#endif 
-			
+#endif /* HTC_WQ */
+			/*gyro->polling_enabled = false;*/
 		}
 
-		mutex_lock(&data->lock);
 #ifdef SLEEP
 		err = r3gd20_register_update(data, buf, CTRL_REG1,
 				0x0F, (ENABLE_NO_AXES | PM_NORMAL));
 #else
 		err = r3gd20_register_update(data, buf, CTRL_REG1,
 				0x08, PM_OFF);
-#endif 
+#endif /*SLEEP*/
 		mutex_unlock(&data->lock);
-	
+	/*}*/
 
-#endif 
-	if (data && (data->pdata->power_LPM))
-		data->pdata->power_LPM(1);
-
-	I("%s:--\n", __func__);
+#endif /*CONFIG_SUSPEND*/
+	D("%s:--\n", __func__);
 	return err;
 }
 
@@ -1792,16 +1851,16 @@ static int r3gd20_resume(struct i2c_client *client)
 	u8 buf[2];
 	int err = -1;
 
-	I("%s:++\n", __func__);
+	D("%s:++\n", __func__);
 #if DEBUG
 	I("r3gd20_resume\n");
-#endif 
+#endif /*DEBUG */
 
 	if (atomic_read(&data->enabled)) {
 		mutex_lock(&data->lock);
 
 		if (data->polling_enabled) {
-			D("polling enabled\n");
+			E("polling enabled\n");
 #ifdef HTC_WQ
 			queue_delayed_work(data->gyro_wq, &polling_work,
 					   msecs_to_jiffies(data->input_poll_dev->
@@ -1823,13 +1882,12 @@ static int r3gd20_resume(struct i2c_client *client)
 
 	}
 
-#endif 
-	data->is_suspended = 0;
-	I("%s--: data->is_suspended = %d\n", __func__, data->is_suspended);
+#endif /*CONFIG_SUSPEND*/
+	D("%s:--\n", __func__);
 	return 0;
 }
 
-#else 
+#else /* HTC_SUSPEND */
 
 static int r3gd20_suspend(struct device *dev)
 {
@@ -1844,18 +1902,18 @@ static int r3gd20_suspend(struct device *dev)
 
 #if DEBUG
 	I("r3gd20_suspend\n");
-#endif 
+#endif /* DEBUG */
 	I("%s\n", __func__);
 	if (atomic_read(&data->enabled)) {
 		mutex_lock(&data->lock);
 		if (data->polling_enabled) {
-			D("polling disabled\n");
+			E("polling disabled\n");
 #ifdef HTC_WQ
 			cancel_delayed_work_sync(&polling_work);
 #else
 			cancel_delayed_work_sync(&data->input_poll_dev->work);
-#endif 
-			
+#endif /* HTC_WQ */
+			/*gyro->polling_enabled = false;*/
 		}
 #ifdef SLEEP
 		err = r3gd20_register_update(data, buf, CTRL_REG1,
@@ -1863,11 +1921,11 @@ static int r3gd20_suspend(struct device *dev)
 #else
 		err = r3gd20_register_update(data, buf, CTRL_REG1,
 				0x08, PM_OFF);
-#endif 
+#endif /*SLEEP*/
 		mutex_unlock(&data->lock);
 	}
 
-#endif 
+#endif /*CONFIG_SUSPEND*/
 	return err;
 }
 
@@ -1882,12 +1940,12 @@ static int r3gd20_resume(struct device *dev)
 	D("%s:\n", __func__);
 #if DEBUG
 	I("r3gd20_resume\n");
-#endif 
+#endif /*DEBUG */
 	I("%s\n", __func__);
 	if (atomic_read(&data->enabled)) {
 		mutex_lock(&data->lock);
 		if (data->polling_enabled) {
-			D("polling enabled\n");
+			E("polling enabled\n");
 #ifdef HTC_WQ
 			queue_delayed_work(data->gyro_wq, &polling_work,
 					   msecs_to_jiffies(data->input_poll_dev->
@@ -1909,11 +1967,11 @@ static int r3gd20_resume(struct device *dev)
 
 	}
 
-#endif 
+#endif /*CONFIG_SUSPEND*/
 	return 0;
 }
 
-#endif 
+#endif /* HTC_SUSPEND */
 
 static const struct i2c_device_id r3gd20_id[] = {
 	{ R3GD20_GYR_DEV_NAME , 0 },
@@ -1927,7 +1985,7 @@ static struct dev_pm_ops r3gd20_pm = {
 	.suspend = r3gd20_suspend,
 	.resume = r3gd20_resume,
 };
-#endif 
+#endif /* HTC_SUSPEND */
 
 static struct i2c_driver r3gd20_driver = {
 	.driver = {
@@ -1935,7 +1993,7 @@ static struct i2c_driver r3gd20_driver = {
 			.name = R3GD20_GYR_DEV_NAME,
 #ifndef HTC_SUSPEND
 			.pm = &r3gd20_pm,
-#endif 
+#endif /* HTC_SUSPEND */
 	},
 	.probe = r3gd20_probe,
 	.remove = __devexit_p(r3gd20_remove),

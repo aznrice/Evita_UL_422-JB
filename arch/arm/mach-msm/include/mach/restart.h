@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,10 +22,17 @@ enum RAMDUMP_STATUS {
 	RAMDUMP_UNKNOWN_INST
 };
 
+#if defined(CONFIG_LGE_CRASH_HANDLER)
+#define SUB_THD_F_PWR	0x0190
+#define SUB_THD_F_SD	0x0110
+#define SUB_UNAB_THD	0x0120
+#define SUB_RESET_SOC	0x0130
+#define SUB_UNKNOWN	0x0140
+#endif
+
 #if defined(CONFIG_MSM_NATIVE_RESTART)
 enum RESTART_MODE {
-	
-	RESTART_MODE_LEGECY = 0,
+	RESTART_MODE_LEGACY = 0,
 
 	RESTART_MODE_Q6_WATCHDOG_BITE,
 
@@ -51,7 +58,6 @@ void fsm_restart(char mode, const char *cmd);
 #endif
 
 extern int pmic_reset_irq;
-extern char *hashed_command_line;
 
 #endif
 

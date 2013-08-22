@@ -117,9 +117,8 @@ static int crypto_aead_report(struct sk_buff *skb, struct crypto_alg *alg)
 	struct crypto_report_aead raead;
 	struct aead_alg *aead = &alg->cra_aead;
 
-	snprintf(raead.type, CRYPTO_MAX_ALG_NAME, "%s", "aead");
-	snprintf(raead.geniv, CRYPTO_MAX_ALG_NAME, "%s",
-		 aead->geniv ?: "<built-in>");
+	strncpy(raead.type, "aead", sizeof(raead.type));
+	strncpy(raead.geniv, aead->geniv ?: "<built-in>", sizeof(raead.geniv));
 
 	raead.blocksize = alg->cra_blocksize;
 	raead.maxauthsize = aead->maxauthsize;
@@ -203,8 +202,8 @@ static int crypto_nivaead_report(struct sk_buff *skb, struct crypto_alg *alg)
 	struct crypto_report_aead raead;
 	struct aead_alg *aead = &alg->cra_aead;
 
-	snprintf(raead.type, CRYPTO_MAX_ALG_NAME, "%s", "nivaead");
-	snprintf(raead.geniv, CRYPTO_MAX_ALG_NAME, "%s", aead->geniv);
+	strncpy(raead.type, "nivaead", sizeof(raead.type));
+	strncpy(raead.geniv, aead->geniv, sizeof(raead.geniv));
 
 	raead.blocksize = alg->cra_blocksize;
 	raead.maxauthsize = aead->maxauthsize;
@@ -301,7 +300,7 @@ struct crypto_instance *aead_geniv_alloc(struct crypto_template *tmpl,
 
 	spawn = crypto_instance_ctx(inst);
 
-	
+	/* Ignore async algorithms if necessary. */
 	mask |= crypto_requires_sync(algt->type, algt->mask);
 
 	crypto_set_aead_spawn(spawn, inst);
@@ -315,6 +314,11 @@ struct crypto_instance *aead_geniv_alloc(struct crypto_template *tmpl,
 	if (!alg->cra_aead.ivsize)
 		goto err_drop_alg;
 
+	/*
+	 * This is only true if we're constructing an algorithm with its
+	 * default IV generator.  For the default generator we elide the
+	 * template name and double-check the IV generator.
+	 */
 	if (algt->mask & CRYPTO_ALG_GENIV) {
 		if (strcmp(tmpl->name, alg->cra_aead.geniv))
 			goto err_drop_alg;
@@ -422,13 +426,13 @@ static int crypto_nivaead_default(struct crypto_alg *alg, u32 type, u32 mask)
 	ptype.attr.rta_len = sizeof(ptype);
 	ptype.attr.rta_type = CRYPTOA_TYPE;
 	ptype.data.type = type | CRYPTO_ALG_GENIV;
-	
+	/* GENIV tells the template that we're making a default geniv. */
 	ptype.data.mask = mask | CRYPTO_ALG_GENIV;
 	tb[0] = &ptype.attr;
 
 	palg.attr.rta_len = sizeof(palg);
 	palg.attr.rta_type = CRYPTOA_ALG;
-	
+	/* Must use the exact name to locate ourselves. */
 	memcpy(palg.data.name, alg->cra_driver_name, CRYPTO_MAX_ALG_NAME);
 	tb[1] = &palg.attr;
 
@@ -451,7 +455,7 @@ static int crypto_nivaead_default(struct crypto_alg *alg, u32 type, u32 mask)
 		goto put_tmpl;
 	}
 
-	
+	/* Redo the lookup to use the instance we just registered. */
 	err = -EAGAIN;
 
 put_tmpl:
