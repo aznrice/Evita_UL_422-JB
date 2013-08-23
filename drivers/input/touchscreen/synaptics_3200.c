@@ -146,7 +146,7 @@ extern unsigned int get_tamper_sf(void);
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
 #define BACK_BUTTON		112
 #define HOME_BUTTON		360
-#define MENU_BUTTON		595
+#define RECENT_BUTTON		595
 
 int s2w_switch = 1;
 int s2w_temp = 1;
@@ -164,7 +164,7 @@ typedef struct {
 static button buttons[] = {
 			{112, "BACK"},			
 			{360, "HOME"},
-			{595, "MENU"},
+			{595, "RECENT"},
 };
 				
 int s2w_startbutton = -1;
