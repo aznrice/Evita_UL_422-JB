@@ -1220,7 +1220,7 @@ static struct snd_soc_dai_link msm_dai_common[] = {
 		.name = "MSM8960 Media1",
 		.stream_name = "MultiMedia1",
 		.cpu_dai_name	= "MultiMedia1",
-		.platform_name  = "msm-pcm-dsp",
+		.platform_name  = "msm-multi-ch-pcm-dsp",
 		.dynamic = 1,
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
@@ -1271,7 +1271,7 @@ static struct snd_soc_dai_link msm_dai_common[] = {
 	},
 	{
 		.name = "MSM8960 LPA",
-		.stream_name = "LPA",
+		.stream_name = "MultiMedia3",
 		.cpu_dai_name	= "MultiMedia3",
 		.platform_name  = "msm-pcm-lpa",
 		.dynamic = 1,
@@ -1329,8 +1329,8 @@ static struct snd_soc_dai_link msm_dai_common[] = {
 		.ignore_suspend = 1,
 	},
 	{
-		.name = "MSM8960 Compr",
-		.stream_name = "COMPR",
+		.name = "MSM8960 Compr1",
+		.stream_name = "COMPR1",
 		.cpu_dai_name	= "MultiMedia4",
 		.platform_name  = "msm-compr-dsp",
 		.dynamic = 1,
@@ -1405,8 +1405,7 @@ static struct snd_soc_dai_link msm_dai_common[] = {
 		.dynamic = 1,
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-					SND_SOC_DPCM_TRIGGER_POST},
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST, SND_SOC_DPCM_TRIGGER_POST},
 		.ignore_suspend = 1,
 		/* this dainlink has playback support */
 		.ignore_pmdown_time = 1,
