@@ -127,7 +127,7 @@ EXPORT_SYMBOL(getPowerKeyState);
 static void power_key_state_disable_work_func(struct work_struct *dummy)
 {
 	setPowerKeyState(0);
-	printk(KERN_INFO "[PWR][STATE]power key pressed outdated\n");
+	printk(KERN_INFO "[KEY][PWR][STATE]power key pressed outdated\n");
 }
 static DECLARE_DELAYED_WORK(power_key_state_disable_work, power_key_state_disable_work_func);
 

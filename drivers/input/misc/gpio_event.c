@@ -45,7 +45,7 @@ static int gpio_input_event(
 		if (ip->input_devs->dev[devnr] == dev)
 			break;
 	if (devnr == ip->input_devs->count) {
-		pr_err("gpio_event_probe: %s: unknown device %p\n", __func__, dev);
+		pr_err("gpio_input_event: %s: unknown device %p\n", __func__, dev);
 		return -EIO;
 	}
 
@@ -72,7 +72,7 @@ static int gpio_event_call_all_func(struct gpio_event *ip, int func)
 		for (i = 0; i < ip->info->info_count; i++, ii++) {
 			if ((*ii)->func == NULL) {
 				ret = -ENODEV;
-				pr_err("gpio_event_probe: gpio_event_probe: Incomplete pdata, "
+				pr_err("gpio_input_event: Incomplete pdata, "
 					"no function\n");
 				goto err_no_func;
 			}
@@ -81,7 +81,7 @@ static int gpio_event_call_all_func(struct gpio_event *ip, int func)
 			ret = (*ii)->func(ip->input_devs, *ii, &ip->state[i],
 					  func);
 			if (ret) {
-				pr_err("gpio_event_probe: gpio_event_probe: function failed\n");
+				pr_err("gpio_input_event: function failed\n");
 				goto err_func_failed;
 			}
 		}
