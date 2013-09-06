@@ -21,6 +21,18 @@
 #include <linux/cpumask.h>
 #include <asm/div64.h>
 
+#ifdef CONFIG_CMDLINE_OPTIONS
+/* cmdline_khz variables */
+extern uint32_t cmdline_maxkhz, cmdline_minkhz;
+extern char cmdline_gov[16];
+extern int cmdline_gov_cnt;
+extern uint32_t cmdline_maxscroff;
+extern bool cmdline_scroff;
+
+/* check_khz function for cmdline khz parameters */
+extern uint32_t acpu_check_khz_value(unsigned long khz);
+#endif
+
 #define CPUFREQ_NAME_LEN 16
 
 
@@ -381,6 +393,15 @@ extern struct cpufreq_governor cpufreq_gov_badass;
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_LIONHEART)
 extern struct cpufreq_governor cpufreq_gov_lionheart;
 #define CPUFREQ_DEFAULT_GOVERNOR (&cpufreq_gov_lionheart)
+#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_SMARTMAX)
+extern struct cpufreq_governor cpufreq_gov_smartmax;
+#define CPUFREQ_DEFAULT_GOVERNOR  (&cpufreq_gov_smartmax)
+#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_SMARTASSV2)
+extern struct cpufreq_governor cpufreq_gov_smartass2;
+#define CPUFREQ_DEFAULT_GOVERNOR  (&cpufreq_gov_SMARTASSV2)
+#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_LAGFREE)
+extern struct cpufreq_governor cpufreq_gov_lagfree;
+#define CPUFREQ_DEFAULT_GOVERNOR  (&cpufreq_gov_LAGFREE)
 #endif
 
 
