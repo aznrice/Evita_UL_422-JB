@@ -1220,7 +1220,7 @@ static struct snd_soc_dai_link msm_dai_common[] = {
 		.name = "MSM8960 Media1",
 		.stream_name = "MultiMedia1",
 		.cpu_dai_name	= "MultiMedia1",
-		.platform_name  = "msm-multi-ch-pcm-dsp",
+		.platform_name  = "msm-pcm-dsp",
 		.dynamic = 1,
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
@@ -1271,7 +1271,7 @@ static struct snd_soc_dai_link msm_dai_common[] = {
 	},
 	{
 		.name = "MSM8960 LPA",
-		.stream_name = "MultiMedia3",
+		.stream_name = "LPA",
 		.cpu_dai_name	= "MultiMedia3",
 		.platform_name  = "msm-pcm-lpa",
 		.dynamic = 1,
