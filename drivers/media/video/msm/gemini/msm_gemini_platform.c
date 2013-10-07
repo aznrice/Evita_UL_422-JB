@@ -31,6 +31,8 @@ void msm_gemini_platform_p2v(struct file  *file,
 				struct ion_handle **ionhandle)
 {
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	if(*ionhandle == NULL)
+		return;
 	ion_unmap_iommu(gemini_client, *ionhandle, CAMERA_DOMAIN, GEN_POOL);
 	ion_free(gemini_client, *ionhandle);
 	*ionhandle = NULL;
@@ -148,11 +150,13 @@ int msm_gemini_platform_init(struct platform_device *pdev,
 			goto fail2;
 		}
 	} else {
+#ifndef CONFIG_ARCH_MSM8X60
 		rc = msm_cam_clk_enable(&pgmn_dev->pdev->dev,
 				gemini_imem_clk_info, &pgmn_dev->gemini_clk[2],
 				ARRAY_SIZE(gemini_imem_clk_info), 1);
 		if (!rc)
 			pgmn_dev->hw_version = GEMINI_8960;
+#endif 
 	}
 
 	if (pgmn_dev->hw_version != GEMINI_7X) {

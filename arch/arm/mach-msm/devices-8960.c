@@ -113,6 +113,10 @@
 #define MSM8960_PC_CNTR_PHYS	(MSM8960_IMEM_PHYS + 0x664)
 #define MSM8960_PC_CNTR_SIZE		0x40
 
+/* avtimer */
+#define AVTIMER_MSW_PHYSICAL_ADDRESS 0x2800900C
+#define AVTIMER_LSW_PHYSICAL_ADDRESS 0x28009008
+
 #ifdef CONFIG_MACH_HTC
 struct flash_platform_data msm_nand_data = {
 	.parts		= NULL,

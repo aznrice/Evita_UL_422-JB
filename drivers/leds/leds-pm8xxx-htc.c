@@ -81,11 +81,8 @@ static int flag_hold_virtual_key = 0;
 static int virtual_key_state;
 
 static int current_blink = 0;
-//static int lut_coefficient = 100;
-//static int dutys_array[64];
-
-static int blink_buttons = 1;
-
+static int lut_coefficient = 100;
+static int dutys_array[64];
 u8 pm8xxxx_led_pwm_mode(int flag)
 {
 	u8 mode = 0;
@@ -199,44 +196,26 @@ void pm8xxx_led_current_set_flagged(struct led_classdev *led_cdev, enum led_brig
 			LED_ERR("%s can't set (%d) led value rc=%d\n", __func__, led->id, rc);
 
 		if (led->function_flags & LED_BRETH_FUNCTION) {
-		
-			if (blink == 0)
-			{
-				buttons_led_is_on = 1;
-				// no blink needed
-				pduties = led->duties;
-				pm8xxx_pwm_lut_config(led->pwm_led,
-							led->period_us,
-							pduties,
-							led->duty_time_ms,
-							led->start_index,
-							led->duites_size,
-							0, 0,
-							led->lut_flag);
-			} else
-			{
-				pduties = led->duties;
-				// LUT_LOOP for blinking
-				pm8xxx_pwm_lut_config(led->pwm_led,
-							led->period_us,
-							pduties,
-							led->duty_time_ms, // slower, 2x
-							led->start_index,
-							led->duites_size * 8, // 16 duty entries -> original size * 2, + 6 * 8 zeroes for pause
-							0, 0,
-							PM_PWM_LUT_LOOP | PM_PWM_LUT_PAUSE_HI_EN);
-			}
+			pduties = &dutys_array[0];
+			pm8xxx_pwm_lut_config(led->pwm_led,
+						led->period_us,
+						pduties,
+						led->duty_time_ms,
+						led->start_index,
+						led->duites_size,
+						0, 0,
+						led->lut_flag);
 			pm8xxx_pwm_lut_enable(led->pwm_led, 0);
 			pm8xxx_pwm_lut_enable(led->pwm_led, 1);
 		} else {
-			pwm_config(led->pwm_led, 64000, 64000);
+			pwm_config(led->pwm_led, 6400 * led->pwm_coefficient / 100, 6400);
 			pwm_enable(led->pwm_led);
 		}
 	} else {
 		if (led->function_flags & LED_BRETH_FUNCTION) {
 			buttons_led_is_on = 0;
 			wake_lock_timeout(&pmic_led_wake_lock, HZ*2);
-			pduties = led->duties + led->duites_size;
+			pduties = &dutys_array[8];
 			pm8xxx_pwm_lut_config(led->pwm_led,
 						led->period_us,
 						pduties,
@@ -578,7 +557,7 @@ static ssize_t pm8xxx_led_blink_store(struct device *dev,
 		if (ldata->gpio_status_switch != NULL)
 			ldata->gpio_status_switch(1);
 		pwm_disable(ldata->pwm_led);
-		pwm_config(ldata->pwm_led, 64000, 2000000);
+		pwm_config(ldata->pwm_led, ldata->blink_duty_per_2sec, 2000000);
 		pwm_enable(ldata->pwm_led);
 
 		if(ldata->led_sync) {
@@ -586,14 +565,14 @@ static ssize_t pm8xxx_led_blink_store(struct device *dev,
 				if (green_back_led_data->gpio_status_switch != NULL)
 					green_back_led_data->gpio_status_switch(1);
 				pwm_disable(green_back_led_data->pwm_led);
-				pwm_config(green_back_led_data->pwm_led, 64000, 2000000);
+				pwm_config(green_back_led_data->pwm_led, ldata->blink_duty_per_2sec, 2000000);
 				pwm_enable(green_back_led_data->pwm_led);
 			}
 			if	(!strcmp(ldata->cdev.name, "amber")) {
 				if (amber_back_led_data->gpio_status_switch != NULL)
 					amber_back_led_data->gpio_status_switch(1);
 				pwm_disable(amber_back_led_data->pwm_led);
-				pwm_config(amber_back_led_data->pwm_led, 64000, 2000000);
+				pwm_config(amber_back_led_data->pwm_led, ldata->blink_duty_per_2sec, 2000000);
 				pwm_enable(amber_back_led_data->pwm_led);
 			}
 		}
@@ -736,6 +715,7 @@ static ssize_t pm8xxx_led_currents_store(struct device *dev,
 	ldata = container_of(led_cdev, struct pm8xxx_led_data, cdev);
 
 	LED_INFO("%s: bank %d currents %d\n", __func__, ldata->bank, currents);
+	if (currents <= 60)
 	ldata->out_current = currents;
 
 	ldata->cdev.brightness_set(led_cdev, 0);
@@ -746,12 +726,89 @@ static ssize_t pm8xxx_led_currents_store(struct device *dev,
 }
 static DEVICE_ATTR(currents, 0644, pm8xxx_led_currents_show, pm8xxx_led_currents_store);
 
+static ssize_t pm8xxx_led_pwm_coefficient_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct led_classdev *led_cdev;
+	struct pm8xxx_led_data *ldata;
+
+	led_cdev = (struct led_classdev *) dev_get_drvdata(dev);
+	ldata = container_of(led_cdev, struct pm8xxx_led_data, cdev);
+
+	return sprintf(buf, "%d\n", ldata->pwm_coefficient);
+}
+
+static ssize_t pm8xxx_led_pwm_coefficient_store(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{
+	int pwm_coefficient1 = 0;
+	struct led_classdev *led_cdev;
+	struct pm8xxx_led_data *ldata;
+
+	sscanf(buf, "%d", &pwm_coefficient1);
+	if ((pwm_coefficient1 < 0) || (pwm_coefficient1 > 100)) {
+		LED_INFO("%s: pwm_coefficient = %d, out of range.\n",
+			__func__, pwm_coefficient1);
+		return -EINVAL;
+	}
+
+	led_cdev = (struct led_classdev *)dev_get_drvdata(dev);
+	ldata = container_of(led_cdev, struct pm8xxx_led_data, cdev);
+
+	LED_INFO("%s: pwm_coefficient %d\n", __func__, pwm_coefficient1);
+
+	ldata->pwm_coefficient = pwm_coefficient1;
+
+	return count;
+}
+static DEVICE_ATTR(pwm_coefficient, 0644, pm8xxx_led_pwm_coefficient_show, pm8xxx_led_pwm_coefficient_store);
+
+static ssize_t pm8xxx_led_lut_coefficient_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct led_classdev *led_cdev;
+	struct pm8xxx_led_data *ldata;
+
+	led_cdev = (struct led_classdev *) dev_get_drvdata(dev);
+	ldata = container_of(led_cdev, struct pm8xxx_led_data, cdev);
+
+	return sprintf(buf, "%d\n", lut_coefficient);
+}
+
+static ssize_t pm8xxx_led_lut_coefficient_store(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{
+	int lut_coefficient1 = 0;
+	int i;
+	struct led_classdev *led_cdev;
+	struct pm8xxx_led_data *ldata;
+
+	sscanf(buf, "%d", &lut_coefficient1);
+	if (lut_coefficient1 < 0)
+		return -EINVAL;
+
+	led_cdev = (struct led_classdev *)dev_get_drvdata(dev);
+	ldata = container_of(led_cdev, struct pm8xxx_led_data, cdev);
+
+	LED_INFO("%s: lut_coefficient %d\n", __func__, lut_coefficient1);
+	for (i = 0; i < 16; i++) {
+		dutys_array[i] = (*(ldata->duties + i)) * lut_coefficient1 / 100;
+	}
+	lut_coefficient = lut_coefficient1;
+	return count;
+}
+static DEVICE_ATTR(lut_coefficient, 0644, pm8xxx_led_lut_coefficient_show, pm8xxx_led_lut_coefficient_store);
+
 static int __devinit pm8xxx_led_probe(struct platform_device *pdev)
 {
 	const struct pm8xxx_led_platform_data *pdata = pdev->dev.platform_data;
 	struct pm8xxx_led_configure *curr_led;
 	struct pm8xxx_led_data *led, *led_dat;
-	int i, ret = -ENOMEM;
+	int i, j, ret = -ENOMEM;
 
 	if (pdata == NULL) {
 		LED_ERR("platform data not supplied\n");
@@ -786,6 +843,21 @@ static int __devinit pm8xxx_led_probe(struct platform_device *pdev)
 		led_dat->duties			= &(curr_led->duties[0]);
 		led_dat->led_sync			= curr_led->led_sync;
 		led_dat->pwm_led 		= pwm_request(led_dat->bank, led_dat->cdev.name);
+		led_dat->lpm_power      = curr_led->lpm_power;
+		if (curr_led->duties[1]) {
+			for (j = 0; j < 64; j++)
+				dutys_array[j] = *(led_dat->duties + j);
+		}
+
+		if( curr_led->pwm_coefficient > 0 )
+			led_dat->pwm_coefficient	= curr_led->pwm_coefficient;
+		else
+			led_dat->pwm_coefficient	= 100;
+
+		if (curr_led->blink_duty_per_2sec > 0)
+			led_dat->blink_duty_per_2sec = curr_led->blink_duty_per_2sec;
+		else
+			led_dat->blink_duty_per_2sec = 64000;
 
 		switch (led_dat->id) {
 		case PM8XXX_ID_GPIO24:
@@ -828,10 +900,18 @@ static int __devinit pm8xxx_led_probe(struct platform_device *pdev)
 				goto err_register_attr_currents;
 			}
 		}
-		// blink buttons end
-		
+
 		if (led_dat->id >= PM8XXX_ID_LED_2 && led_dat->id <= PM8XXX_ID_LED_0) {
-			ret = device_create_file(led_dat->cdev.dev, &dev_attr_currents);
+			ret = device_create_file(led_dat->cdev.dev, &dev_attr_lut_coefficient);
+			if (ret < 0) {
+				LED_ERR("%s: Failed to create %d attr lut_coefficient\n", __func__, i);
+				goto err_register_attr_lut_coefficient;
+			}
+		}
+
+		if ((led_dat->id <= PM8XXX_ID_GPIO26) || (led_dat->id <= PM8XXX_ID_LED_2) ||
+		    (led_dat->id <= PM8XXX_ID_LED_1)) {
+			ret = device_create_file(led_dat->cdev.dev, &dev_attr_pwm_coefficient);
 			if (ret < 0) {
 				LED_ERR("%s: Failed to create %d attr currents\n", __func__, i);
 				goto err_register_attr_currents;
@@ -897,6 +977,23 @@ err_register_attr_blink:
 		}
 	}
 	i = pdata->num_leds;
+err_register_attr_pwm_coefficient:
+	if (i > 0) {
+		for (i = i - 1; i >= 0; i--) {
+			if (led[i].function_flags <= PM8XXX_ID_GPIO26)
+				device_remove_file(led[i].cdev.dev, &dev_attr_pwm_coefficient);
+		}
+	}
+	i = pdata->num_leds;
+err_register_attr_lut_coefficient:
+	if (i > 0) {
+		for (i = i - 1; i >= 0; i--) {
+			if (led[i].function_flags >= PM8XXX_ID_LED_2 && led[i].function_flags <= PM8XXX_ID_LED_0)
+				device_remove_file(led[i].cdev.dev, &dev_attr_lut_coefficient);
+		}
+	}
+	i = pdata->num_leds;
+
 err_register_attr_currents:
 	if (i > 0) {
 		for (i = i - 1; i >= 0; i--) {
@@ -942,9 +1039,35 @@ static int __devexit pm8xxx_led_remove(struct platform_device *pdev)
 
 	return 0;
 }
+static int pm8xxx_led_resume(struct platform_device *pdev)
+{
+	int i;
+	const struct led_platform_data *pdata =
+				pdev->dev.platform_data;
+	struct pm8xxx_led_data *led = platform_get_drvdata(pdev);
+	for (i = 0; i < pdata->num_leds; i++) {
+		if (!strcmp(led[i].cdev.name, "button-backlight") && led[i].lpm_power)
+			led[i].lpm_power(0);
+	}
+	return 0;
+}
+static int pm8xxx_led_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	int i;
+	const struct led_platform_data *pdata =
+				pdev->dev.platform_data;
+	struct pm8xxx_led_data *led = platform_get_drvdata(pdev);
+	for (i = 0; i < pdata->num_leds; i++) {
+		if (!strcmp(led[i].cdev.name, "button-backlight") && led[i].lpm_power)
+			led[i].lpm_power(1);
+	}
+	return 0;
+}
 
 static struct platform_driver pm8xxx_led_driver = {
 	.probe		= pm8xxx_led_probe,
+	.suspend    = pm8xxx_led_suspend,
+	.resume     = pm8xxx_led_resume,
 	.remove		= __devexit_p(pm8xxx_led_remove),
 	.driver		= {
 		.name	= PM8XXX_LEDS_DEV_NAME,
