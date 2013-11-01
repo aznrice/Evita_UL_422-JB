@@ -157,9 +157,9 @@ config ARCH_MSM8960
 	select MSM_SPM_V2
 	select MSM_L2_SPM
 	select MSM_NATIVE_RESTART
-	select DONT_MAP_HOLE_AFTER_MEMBANK0
+	select DONT_MAP_HOLE_AFTER_MEMBANK0 if !MACH_HTC
 	select MSM_REMOTE_SPINLOCK_SFPB
-	select ARCH_SPARSEMEM_ENABLE
+	select ARCH_SPARSEMEM_ENABLE if !MACH_HTC
 	select ARCH_HAS_HOLES_MEMORYMODEL
 	select CLEANCACHE
 	select MSM_MULTIMEDIA_USE_ION
@@ -172,6 +172,10 @@ config ARCH_MSM8960
 	select MSM_IOMMU_GPU_SYNC if MSM_IOMMU
 	select MSM_CPU_PWRCTL
 	select MSM_ULTRASOUND_A
+	select GENERIC_TIME_VSYSCALL
+	select USE_USER_ACCESSIBLE_TIMERS
+	select ARM_USE_USER_ACCESSIBLE_TIMERS
+	select MSM_USE_USER_ACCESSIBLE_TIMERS
 
 config ARCH_MSM8930
 	bool "MSM8930"
@@ -206,6 +210,10 @@ config ARCH_MSM8930
 	select MSM_KRAIT_WFE_FIXUP
 	select MSM_IOMMU_GPU_SYNC if MSM_IOMMU
 	select MSM_CPU_PWRCTL
+	select GENERIC_TIME_VSYSCALL
+	select USE_USER_ACCESSIBLE_TIMERS
+	select ARM_USE_USER_ACCESSIBLE_TIMERS
+	select MSM_USE_USER_ACCESSIBLE_TIMERS
 
 config ARCH_APQ8064
 	bool "APQ8064"
@@ -235,6 +243,10 @@ config ARCH_APQ8064
 	select MSM_IOMMU_GPU_SYNC if MSM_IOMMU
 	select MSM_CPU_PWRCTL
 	select MSM_ULTRASOUND_A
+	select GENERIC_TIME_VSYSCALL
+	select USE_USER_ACCESSIBLE_TIMERS
+	select ARM_USE_USER_ACCESSIBLE_TIMERS
+	select MSM_USE_USER_ACCESSIBLE_TIMERS
 
 config ARCH_MSM8974
 	bool "MSM8974"
@@ -2658,5 +2670,12 @@ config MSM_CPU_PWRCTL
 	  Droop detector mechanism can adversely affect krait plls during
 	  stand alone power collapse operation. Selecting this option
 	  ensures that they are always off.
+
+config MSM_USE_USER_ACCESSIBLE_TIMERS
+	bool "Enables mapping an MSM timer counter page to user space."
+	depends on ARM_USE_USER_ACCESSIBLE_TIMERS
+	help
+	  Enables MSM-specific user accessible timers via a shared
+	  memory page containing the cycle counter.
 
 endif

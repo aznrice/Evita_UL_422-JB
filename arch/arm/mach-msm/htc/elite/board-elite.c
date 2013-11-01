@@ -1255,12 +1255,15 @@ static struct platform_device qcedev_device = {
 #endif
 
 #ifdef CONFIG_HTC_BATT_8960
+static int critical_alarm_voltage_mv[] = {3000, 3200, 3400};
+
 static struct htc_battery_platform_data htc_battery_pdev_data = {
 	.guage_driver = 0,
 	.chg_limit_active_mask = HTC_BATT_CHG_LIMIT_BIT_TALK |
 								HTC_BATT_CHG_LIMIT_BIT_NAVI,
 	.critical_low_voltage_mv = 3200,
-	.critical_alarm_voltage_mv = 3000,
+	.critical_alarm_vol_ptr = critical_alarm_voltage_mv,
+	.critical_alarm_vol_cols = sizeof(critical_alarm_voltage_mv) / sizeof(int),
 	.overload_vol_thr_mv = 4000,
 	.overload_curr_thr_ma = 0,
 	/* charger */
@@ -4317,11 +4320,13 @@ static void __init elite_init(void)
 	if (cpu_is_msm8960ab())
 		msm8960ab_update_krait_spm();
 	if (cpu_is_krait_v3()) {
-		msm_pm_set_tz_retention_flag(0);
+		struct msm_pm_init_data_type *pdata =
+			msm8960_pm_8x60.dev.platform_data;
+		pdata->retention_calls_tz = false;
 		msm8960ab_update_retention_spm();
-	} else {
-		msm_pm_set_tz_retention_flag(1);
 	}
+	platform_device_register(&msm8960_pm_8x60);
+
 	msm_spm_init(msm_spm_data, ARRAY_SIZE(msm_spm_data));
 	msm_spm_l2_init(msm_spm_l2_data);
 	msm8960_init_buses();
