@@ -354,8 +354,8 @@ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 CFLAGS_MODULE   =
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	= -mcpu=cortex-a9 -march=armv7-a -mfpu=neon -ftree-vectorize
-AFLAGS_KERNEL	= -mcpu=cortex-a9 -march=armv7-a -mfpu=neon -ftree-vectorize
+CFLAGS_KERNEL	= -mcpu=cortex-a15 -march=armv7-a -mfpu=neon -ftree-vectorize
+AFLAGS_KERNEL	= -mcpu=cortex-a15 -march=armv7-a -mfpu=neon -ftree-vectorize
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
@@ -372,10 +372,10 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -mtune=cortex-a9 \
+		   -mtune=cortex-a15 \
 		   -fno-delete-null-pointer-checks \
 		   -fmodulo-sched -fmodulo-sched-allow-regmoves \
-		   -pipe -floop-interchange -ftree-loop-distribution -floop-strip-mine -floop-block
+		   -pipe
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
@@ -568,7 +568,7 @@ all: vmlinux
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os
 else ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
-KBUILD_CFLAGS   += -O3 -fmodulo-sched -fmodulo-sched-allow-regmoves -floop-interchange -ftree-loop-distribution -floop-strip-mine -floop-block
+KBUILD_CFLAGS   += -O3 -fmodulo-sched -fmodulo-sched-allow-regmoves
 else ifdef CONFIG_CC_OPTIMIZE_FOR_SPEED
 KBUILD_CFLAGS   += -Ofast
 else
