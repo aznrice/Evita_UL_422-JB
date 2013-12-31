@@ -24,6 +24,9 @@ obj-y += mdp_ppp_v20.o
 endif
 endif
 
+ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
+CFLAGS_mdp4_overlay.o += -O2
+endif
 ifeq ($(CONFIG_FB_MSM_OVERLAY),y)
 obj-y += mdp4_overlay.o
 obj-y += mdp4_overlay_lcdc.o
