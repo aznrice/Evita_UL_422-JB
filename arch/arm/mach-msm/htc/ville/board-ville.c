@@ -2882,10 +2882,6 @@ static struct platform_device *common_devices[] __initdata = {
 #endif
 	&msm8960_iommu_domain_device,
 	&msm_tsens_device,
-<<<<<<< HEAD
-	&msm8960_pc_cntr,
-=======
->>>>>>> 61675fc94f88967c290224a2b3929b87a2a7f2e1
 	&msm8960_cpu_slp_status,
 #ifdef CONFIG_HTC_BATT_8960
 	&htc_battery_pdev,
