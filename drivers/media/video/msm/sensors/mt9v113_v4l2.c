@@ -319,7 +319,7 @@ static int mt9v113_i2c_write_bit(unsigned short saddr, unsigned short raddr,
 unsigned short bit, unsigned short state)
 {
 	int rc;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 	unsigned short check_bit;
 
 	if (state)
@@ -350,7 +350,7 @@ static int mt9v113_i2c_check_bit(unsigned short saddr, unsigned short raddr,
 unsigned short bit, int check_state)
 {
 	int k;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 	unsigned short check_bit;
 	check_bit = 0x0001 << bit;
 	for (k = 0; k < CHECK_STATE_TIME; k++) {
@@ -549,7 +549,7 @@ static inline int suspend(void)
 static int mt9v113_reg_init(void)
 {
 	int rc = 0, k = 0;
-	unsigned short check_value;
+	unsigned short check_value = 0;
 
     
 	pr_info("%s: Power Up Start\n", __func__);
